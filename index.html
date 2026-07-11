@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>나만의 영어 단어장 &amp; 시험지 메이커</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; min-height: 100vh; display: flex; justify-content: center; padding: 2rem 1rem; color: #2c2c2a; }
+.app { max-width: 780px; width: 100%; }
+h1 { font-size: 21px; font-weight: 600; color: #1a1a18; margin-bottom: 0.25rem; }
+.subtitle { font-size: 14px; color: #888; margin-bottom: 1.5rem; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; border-bottom: 1px solid #e8e8e6; }
+.tab-btn { background: transparent; border: none; padding: 0.65rem 0.9rem; font-size: 14px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab-btn:hover { color: #185FA5; }
+.tab-btn.active { color: #185FA5; border-bottom-color: #185FA5; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.card { background: #fff; border: 1px solid #e8e8e6; border-radius: 14px; padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; }
+.card h2 { font-size: 15px; font-weight: 600; margin-bottom: 0.75rem; color: #1a1a18; }
+.card h3 { font-size: 13px; font-weight: 600; margin: 1rem 0 0.5rem; color: #444; }
+.hint { font-size: 12.5px; color: #999; line-height: 1.6; margin-bottom: 0.75rem; }
+.hint code { background: #f0f0ee; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+label { display: block; font-size: 12.5px; color: #666; margin-bottom: 4px; font-weight: 500; }
+input[type=text], input[type=number], textarea, select {
+  width: 100%; border: 1px solid #dcdcd8; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 14px; font-family: inherit; background: #fafaf8; color: #1a1a18;
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: #185FA5; background: #fff; }
+textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+.field { margin-bottom: 0.85rem; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.row3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 0.75rem; align-items: end; }
+
+.btn { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 0.6rem 1.1rem; font-size: 13.5px; cursor: pointer; color: #444; font-weight: 500; }
+.btn:hover { background: #f0f0ee; }
+.btn.primary { background: #185FA5; color: #fff; border-color: transparent; }
+.btn.primary:hover { background: #0c447c; }
+.btn.danger { color: #b33; border-color: #eecccc; }
+.btn.danger:hover { background: #fdf0f0; }
+.btn.small { padding: 0.35rem 0.7rem; font-size: 12.5px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 0.5rem; }
+
+.word-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.word-table th { text-align: left; font-size: 11.5px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 8px; border-bottom: 1px solid #e8e8e6; }
+.word-table td { padding: 8px 8px; border-bottom: 1px solid #f0f0ee; vertical-align: top; }
+.word-table tr:last-child td { border-bottom: none; }
+.tag { display: inline-block; background: #eef4fb; color: #185FA5; border-radius: 5px; padding: 1px 7px; font-size: 12px; margin: 2px 3px 0 0; }
+.tag.anto { background: #fbeeee; color: #a33; }
+.empty-note { color: #bbb; font-size: 12.5px; }
+.muted { color: #aaa; font-size: 12px; }
+.row-actions { white-space: nowrap; }
+.count-badge { background: #185FA5; color: #fff; border-radius: 10px; padding: 0 6px; font-size: 11px; }
+
+.preview-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 0.75rem; }
+.preview-table th { text-align: left; font-size: 11px; color: #999; padding: 5px 6px; border-bottom: 1px solid #e8e8e6; }
+.preview-table td { padding: 4px 6px; border-bottom: 1px solid #f2f2f0; }
+.preview-table input { padding: 4px 6px; font-size: 12.5px; }
+.preview-table td.chk { width: 26px; text-align: center; }
+
+.quiz-options { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.worksheet { background: #fff; border: 1px solid #e8e8e6; border-radius: 14px; padding: 1.75rem; }
+.ws-header { text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #1a1a18; padding-bottom: 1rem; }
+.ws-header h2 { font-size: 19px; margin-bottom: 0.6rem; }
+.ws-meta { display: flex; justify-content: center; gap: 1.5rem; font-size: 13px; color: #444; }
+.ws-questions { list-style: none; counter-reset: q; }
+.ws-questions li { counter-increment: q; padding: 0.65rem 0; border-bottom: 1px dashed #eee; }
+.ws-questions li::before { content: counter(q) ". "; font-weight: 600; color: #185FA5; }
+.ws-q { display: inline; font-size: 14.5px; }
+.ws-type { font-size: 11px; color: #aaa; margin-left: 6px; }
+.ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
+.ws-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 8px; padding-left: 1.2rem; font-size: 13.5px; }
+.answer-key { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #1a1a18; }
+.answer-key h3 { font-size: 15px; margin-bottom: 0.75rem; }
+.answer-key ol { padding-left: 1.4rem; font-size: 13.5px; line-height: 1.9; columns: 2; }
+.hide-answers .answer-key { display: none; }
+.ws-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+.check-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
+.warn-box { background: #fff8e8; border: 1px solid #f0dca0; color: #7a5c00; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 13px; margin-bottom: 0.75rem; }
+
+@media print {
+  body * { visibility: hidden; }
+  .worksheet, .worksheet * { visibility: visible; }
+  .worksheet { position: absolute; top: 0; left: 0; width: 100%; border: none; padding: 0; border-radius: 0; }
+  .ws-controls { display: none !important; }
+  .answer-key { page-break-before: always; }
+}
+@media (max-width: 560px) {
+  .row2, .row3 { grid-template-columns: 1fr; }
+  .word-table { display: block; overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>📘 나만의 영어 단어장</h1>
+  <p class="subtitle">단어·뜻·동의어·반의어를 모아두고, 랜덤으로 섞어 오프라인 시험지를 인쇄해보세요</p>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="list">📖 단어장 <span class="count-badge" id="wordCountBadge">0</span></button>
+    <button class="tab-btn" data-tab="add">➕ 데이터 추가</button>
+    <button class="tab-btn" data-tab="test">🖨️ 시험지 만들기</button>
+  </nav>
+
+  <!-- 단어장 -->
+  <section id="tab-list" class="tab-panel active">
+    <div class="card">
+      <h2>단어 목록</h2>
+      <div class="field">
+        <input type="text" id="searchBox" placeholder="단어 또는 뜻으로 검색...">
+      </div>
+      <div id="wordListWrap"></div>
+      <div class="btn-row">
+        <button class="btn" id="exportBtn">⬇️ 백업(JSON) 내보내기</button>
+        <button class="btn" id="importBtn">⬆️ 백업 불러오기</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none">
+        <button class="btn danger" id="clearAllBtn">🗑️ 전체 삭제</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 데이터 추가 -->
+  <section id="tab-add" class="tab-panel">
+    <div class="card">
+      <h2>직접 추가</h2>
+      <div class="row2">
+        <div class="field"><label>단어 (영어)</label><input type="text" id="manualWord" placeholder="예: abandon"></div>
+        <div class="field"><label>뜻 (한글)</label><input type="text" id="manualMeaning" placeholder="예: 버리다, 포기하다"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>동의어 (쉼표로 구분)</label><input type="text" id="manualSyn" placeholder="예: desert, forsake"></div>
+        <div class="field"><label>반의어 (쉼표로 구분)</label><input type="text" id="manualAnt" placeholder="예: keep, maintain"></div>
+      </div>
+      <button class="btn primary" id="manualAddBtn">단어장에 추가</button>
+    </div>
+
+    <div class="card">
+      <h2>붙여넣기로 한번에 추가</h2>
+      <p class="hint">
+        다른 곳(엑셀, 구글시트, 워드 등)에서 단어 목록을 복사해 아래에 붙여넣으면 자동으로 표 형식으로 분석해드려요.<br>
+        지원 형식 1 (표 형식, 탭·쉼표·공백 2칸으로 열 구분): <code>단어  뜻  동의어1/동의어2  반의어1/반의어2</code><br>
+        지원 형식 2 (줄바꿈 형식): <code>abandon - 버리다</code> 다음 줄에 <code>동의어: desert, forsake</code>, <code>반의어: keep, maintain</code>
+      </p>
+      <div class="field">
+        <textarea id="pasteArea" placeholder="여기에 단어 목록을 붙여넣으세요..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="parseBtn">🔍 자동 분석하기</button>
+        <button class="btn" id="loadSampleBtn">예시 데이터 넣어보기</button>
+      </div>
+      <div id="parsePreviewWrap"></div>
+    </div>
+  </section>
+
+  <!-- 시험지 만들기 -->
+  <section id="tab-test" class="tab-panel">
+    <div class="card">
+      <h2>시험지 옵션</h2>
+      <div class="quiz-options">
+        <div class="field">
+          <label>문제 유형</label>
+          <select id="quizType">
+            <option value="meaning-write">단어 → 뜻 쓰기 (주관식)</option>
+            <option value="word-write">뜻 → 영단어 쓰기 (주관식)</option>
+            <option value="synonym-write">단어 → 동의어 쓰기 (주관식)</option>
+            <option value="antonym-write">단어 → 반의어 쓰기 (주관식)</option>
+            <option value="meaning-choice">단어 → 뜻 고르기 (4지선다)</option>
+            <option value="word-choice">뜻 → 단어 고르기 (4지선다)</option>
+            <option value="mixed">여러 유형 랜덤 혼합</option>
+          </select>
+        </div>
+        <div class="row2">
+          <div class="field"><label>문제 수</label><input type="number" id="quizCount" min="1" max="100" value="20"></div>
+          <div class="field"><label>시험지 제목</label><input type="text" id="quizTitle" value="영어 단어 시험지"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="generateBtn">시험지 만들기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="worksheetWrap"></div>
+  </section>
+</div>
+
+<script>
+/* ---------------- storage ---------------- */
+const STORAGE_KEY = 'vocabWords';
+let words = loadWords();
+
+function loadWords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveWords() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(words));
+}
+function genId() {
+  return 'w_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---------------- word list rendering ---------------- */
+let editingId = null;
+let searchTerm = '';
+
+function renderWordList() {
+  document.getElementById('wordCountBadge').textContent = words.length;
+  const wrap = document.getElementById('wordListWrap');
+  const filtered = words.filter(w =>
+    !searchTerm ||
+    w.word.toLowerCase().includes(searchTerm) ||
+    w.meaning.toLowerCase().includes(searchTerm)
+  );
+  if (words.length === 0) {
+    wrap.innerHTML = '<p class="empty-note">아직 등록된 단어가 없어요. "데이터 추가" 탭에서 단어를 추가해보세요.</p>';
+    return;
+  }
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<p class="empty-note">검색 결과가 없어요.</p>';
+    return;
+  }
+  const rows = filtered.map(w => {
+    if (editingId === w.id) {
+      return `<tr>
+        <td colspan="4">
+          <div class="row2" style="margin-bottom:6px;">
+            <input type="text" id="edit-word" value="${escapeAttr(w.word)}">
+            <input type="text" id="edit-meaning" value="${escapeAttr(w.meaning)}">
+          </div>
+          <div class="row2" style="margin-bottom:6px;">
+            <input type="text" id="edit-syn" value="${escapeAttr(w.synonyms.join(', '))}" placeholder="동의어">
+            <input type="text" id="edit-ant" value="${escapeAttr(w.antonyms.join(', '))}" placeholder="반의어">
+          </div>
+          <button class="btn small primary" onclick="saveEdit('${w.id}')">저장</button>
+          <button class="btn small" onclick="cancelEdit()">취소</button>
+        </td>
+      </tr>`;
+    }
+    return `<tr>
+      <td><strong>${escapeHtml(w.word)}</strong></td>
+      <td>${escapeHtml(w.meaning) || '<span class="muted">-</span>'}</td>
+      <td>${renderTags(w.synonyms, 'syn')}${renderTags(w.antonyms, 'anto')}</td>
+      <td class="row-actions">
+        <button class="btn small" onclick="startEdit('${w.id}')">수정</button>
+        <button class="btn small danger" onclick="deleteWord('${w.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table class="word-table">
+    <thead><tr><th>단어</th><th>뜻</th><th>동의어 / 반의어</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+function renderTags(list, cls) {
+  if (!list || !list.length) return '';
+  return list.map(t => `<span class="tag ${cls === 'anto' ? 'anto' : ''}">${escapeHtml(t)}</span>`).join('');
+}
+function startEdit(id) { editingId = id; renderWordList(); }
+function cancelEdit() { editingId = null; renderWordList(); }
+function saveEdit(id) {
+  const w = words.find(x => x.id === id);
+  if (!w) return;
+  w.word = document.getElementById('edit-word').value.trim();
+  w.meaning = document.getElementById('edit-meaning').value.trim();
+  w.synonyms = splitList(document.getElementById('edit-syn').value);
+  w.antonyms = splitList(document.getElementById('edit-ant').value);
+  editingId = null;
+  saveWords();
+  renderWordList();
+}
+function deleteWord(id) {
+  if (!confirm('이 단어를 삭제할까요?')) return;
+  words = words.filter(x => x.id !== id);
+  saveWords();
+  renderWordList();
+}
+document.getElementById('searchBox').addEventListener('input', e => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  renderWordList();
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (words.length === 0) return;
+  if (!confirm('단어장의 모든 데이터를 삭제할까요? 되돌릴 수 없습니다.')) return;
+  words = [];
+  saveWords();
+  renderWordList();
+});
+
+/* ---------------- export / import ---------------- */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(words, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vocab-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data)) throw new Error('invalid');
+      let added = 0;
+      data.forEach(d => {
+        if (!d.word) return;
+        if (words.some(w => w.word.toLowerCase() === String(d.word).toLowerCase())) return;
+        words.push({
+          id: genId(),
+          word: String(d.word).trim(),
+          meaning: String(d.meaning || '').trim(),
+          synonyms: Array.isArray(d.synonyms) ? d.synonyms : splitList(d.synonyms || ''),
+          antonyms: Array.isArray(d.antonyms) ? d.antonyms : splitList(d.antonyms || ''),
+          createdAt: Date.now()
+        });
+        added++;
+      });
+      saveWords();
+      renderWordList();
+      alert(added + '개의 단어를 불러왔어요. (중복 단어는 건너뜀)');
+    } catch (err) {
+      alert('올바른 백업 파일이 아니에요.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ---------------- manual add ---------------- */
+document.getElementById('manualAddBtn').addEventListener('click', () => {
+  const word = document.getElementById('manualWord').value.trim();
+  const meaning = document.getElementById('manualMeaning').value.trim();
+  const synonyms = splitList(document.getElementById('manualSyn').value);
+  const antonyms = splitList(document.getElementById('manualAnt').value);
+  if (!word) { alert('단어를 입력해주세요.'); return; }
+  if (words.some(w => w.word.toLowerCase() === word.toLowerCase())) {
+    if (!confirm('이미 등록된 단어예요. 그래도 추가할까요?')) return;
+  }
+  words.push({ id: genId(), word, meaning, synonyms, antonyms, createdAt: Date.now() });
+  saveWords();
+  renderWordList();
+  ['manualWord', 'manualMeaning', 'manualSyn', 'manualAnt'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('manualWord').focus();
+});
+
+/* ---------------- paste & auto parse ---------------- */
+function splitList(str) {
+  if (!str) return [];
+  return str.split(/[,\/;、，]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function parsePastedText(raw) {
+  const text = raw.trim();
+  if (!text) return [];
+  const lines = text.split(/\r?\n/);
+  const synLabel = /^(동의어|유의어|synonyms?|syn)\s*[:\-]\s*/i;
+  const antLabel = /^(반의어|antonyms?|ant)\s*[:\-]\s*/i;
+  const hasLabels = lines.some(l => synLabel.test(l.trim()) || antLabel.test(l.trim()));
+  return hasLabels ? parseBlockFormat(lines, synLabel, antLabel) : parseTableFormat(lines);
+}
+
+function parseBlockFormat(lines, synLabel, antLabel) {
+  const results = [];
+  let current = null;
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) return;
+    if (synLabel.test(line)) {
+      if (current) current.synonyms.push(...splitList(line.replace(synLabel, '')));
+      return;
+    }
+    if (antLabel.test(line)) {
+      if (current) current.antonyms.push(...splitList(line.replace(antLabel, '')));
+      return;
+    }
+    const parsed = parseNewWordLine(line);
+    if (!parsed.word) return;
+    current = parsed;
+    results.push(current);
+  });
+  return results;
+}
+
+function parseNewWordLine(line) {
+  let cols;
+  if (line.includes('\t')) cols = line.split('\t').map(s => s.trim());
+  else if (/ {2,}/.test(line)) cols = line.split(/ {2,}/).map(s => s.trim());
+  else if (/\s[-–:]\s/.test(line)) cols = line.split(/\s*[-–:]\s*/).map(s => s.trim());
+  else cols = [line.trim()];
+  return {
+    word: cols[0] || '',
+    meaning: cols[1] || '',
+    synonyms: cols[2] ? splitList(cols[2]) : [],
+    antonyms: cols[3] ? splitList(cols[3]) : []
+  };
+}
+
+function parseTableFormat(lines) {
+  const results = [];
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) return;
+    let cols;
+    if (line.includes('\t')) cols = line.split('\t').map(s => s.trim());
+    else if (/ {2,}/.test(line)) cols = line.split(/ {2,}/).map(s => s.trim());
+    else if (line.includes(',')) cols = line.split(',').map(s => s.trim());
+    else cols = [line];
+    const word = cols[0] || '';
+    if (!word) return;
+    results.push({
+      word,
+      meaning: cols[1] || '',
+      synonyms: cols[2] ? splitList(cols[2]) : [],
+      antonyms: cols[3] ? splitList(cols[3]) : []
+    });
+  });
+  return results;
+}
+
+let parsedRows = [];
+
+document.getElementById('parseBtn').addEventListener('click', () => {
+  const raw = document.getElementById('pasteArea').value;
+  parsedRows = parsePastedText(raw).map(r => ({ ...r, include: true }));
+  renderParsePreview();
+});
+document.getElementById('loadSampleBtn').addEventListener('click', () => {
+  document.getElementById('pasteArea').value =
+`abandon	버리다, 포기하다	desert, forsake, quit	keep, maintain
+ability	능력	skill, capability	inability
+brave - 용감한
+동의어: courageous, bold
+반의어: cowardly, timid
+calm	차분한	peaceful, tranquil	anxious, agitated`;
+});
+
+function renderParsePreview() {
+  const wrap = document.getElementById('parsePreviewWrap');
+  if (parsedRows.length === 0) {
+    wrap.innerHTML = '<p class="empty-note" style="margin-top:0.75rem;">분석된 데이터가 없어요. 형식을 확인하고 다시 시도해주세요.</p>';
+    return;
+  }
+  const rowsHtml = parsedRows.map((r, i) => `
+    <tr>
+      <td class="chk"><input type="checkbox" ${r.include ? 'checked' : ''} onchange="parsedRows[${i}].include=this.checked"></td>
+      <td><input type="text" value="${escapeAttr(r.word)}" oninput="parsedRows[${i}].word=this.value"></td>
+      <td><input type="text" value="${escapeAttr(r.meaning)}" oninput="parsedRows[${i}].meaning=this.value"></td>
+      <td><input type="text" value="${escapeAttr(r.synonyms.join(', '))}" oninput="parsedRows[${i}].synonyms=splitList(this.value)"></td>
+      <td><input type="text" value="${escapeAttr(r.antonyms.join(', '))}" oninput="parsedRows[${i}].antonyms=splitList(this.value)"></td>
+      <td><button class="btn small danger" onclick="removeParsedRow(${i})">삭제</button></td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <h3>분석 결과 미리보기 (${parsedRows.length}개) — 필요하면 수정 후 추가하세요</h3>
+    <table class="preview-table">
+      <thead><tr><th></th><th>단어</th><th>뜻</th><th>동의어</th><th>반의어</th><th></th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="btn-row">
+      <button class="btn primary" id="commitParseBtn">✅ 선택한 단어 단어장에 추가</button>
+    </div>`;
+  document.getElementById('commitParseBtn').addEventListener('click', commitParsedRows);
+}
+function removeParsedRow(i) {
+  parsedRows.splice(i, 1);
+  renderParsePreview();
+}
+function commitParsedRows() {
+  let added = 0, skipped = 0;
+  parsedRows.filter(r => r.include && r.word).forEach(r => {
+    if (words.some(w => w.word.toLowerCase() === r.word.toLowerCase())) { skipped++; return; }
+    words.push({
+      id: genId(),
+      word: r.word.trim(),
+      meaning: (r.meaning || '').trim(),
+      synonyms: r.synonyms || [],
+      antonyms: r.antonyms || [],
+      createdAt: Date.now()
+    });
+    added++;
+  });
+  saveWords();
+  renderWordList();
+  parsedRows = [];
+  document.getElementById('parsePreviewWrap').innerHTML = '';
+  document.getElementById('pasteArea').value = '';
+  alert(added + '개 추가되었어요.' + (skipped ? ' (' + skipped + '개는 중복이라 건너뜀)' : ''));
+}
+
+/* ---------------- test / worksheet generation ---------------- */
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function sample(arr, n) {
+  return shuffle(arr).slice(0, n);
+}
+
+const CHOICE_LABELS = ['①', '②', '③', '④'];
+
+function poolForType(type) {
+  if (type === 'synonym-write') return words.filter(w => w.synonyms && w.synonyms.length);
+  if (type === 'antonym-write') return words.filter(w => w.antonyms && w.antonyms.length);
+  return words;
+}
+
+function buildQuestion(w, type, num) {
+  switch (type) {
+    case 'meaning-write':
+      return { num, prompt: w.word, answer: w.meaning || '(뜻 없음)', typeLabel: '주관식' };
+    case 'word-write':
+      return { num, prompt: w.meaning || w.word, answer: w.word, typeLabel: '주관식' };
+    case 'synonym-write':
+      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어' };
+    case 'antonym-write':
+      return { num, prompt: w.word, answer: w.antonyms.join(', '), typeLabel: '반의어' };
+    case 'meaning-choice': {
+      const distractors = sample(words.filter(x => x.id !== w.id && x.meaning), 3).map(x => x.meaning);
+      const options = shuffle([w.meaning || '(뜻 없음)', ...distractors]);
+      return { num, prompt: w.word, options, answer: w.meaning || '(뜻 없음)', typeLabel: '객관식' };
+    }
+    case 'word-choice': {
+      const distractors = sample(words.filter(x => x.id !== w.id), 3).map(x => x.word);
+      const options = shuffle([w.word, ...distractors]);
+      return { num, prompt: w.meaning || w.word, options, answer: w.word, typeLabel: '객관식' };
+    }
+  }
+}
+
+document.getElementById('generateBtn').addEventListener('click', () => {
+  const type = document.getElementById('quizType').value;
+  const countInput = parseInt(document.getElementById('quizCount').value, 10) || 20;
+  const title = document.getElementById('quizTitle').value.trim() || '영어 단어 시험지';
+
+  if (words.length === 0) { alert('단어장에 단어가 없어요. 먼저 단어를 추가해주세요.'); return; }
+
+  const usableTypes = ['meaning-write', 'word-write', 'synonym-write', 'antonym-write', 'meaning-choice', 'word-choice'];
+  const basePool = type === 'mixed' ? words : poolForType(type);
+  if (basePool.length === 0) {
+    alert('이 유형에 필요한 데이터(동의어 또는 반의어)가 있는 단어가 없어요.');
+    return;
+  }
+  const count = Math.min(countInput, basePool.length, 100);
+  const chosen = shuffle(basePool).slice(0, count);
+
+  const questions = chosen.map((w, idx) => {
+    let t = type;
+    if (type === 'mixed') {
+      const validTypes = usableTypes.filter(ct => {
+        if (ct === 'synonym-write') return w.synonyms && w.synonyms.length;
+        if (ct === 'antonym-write') return w.antonyms && w.antonyms.length;
+        return true;
+      });
+      t = validTypes[Math.floor(Math.random() * validTypes.length)];
+    }
+    return buildQuestion(w, t, idx + 1);
+  });
+
+  renderWorksheet(title, questions);
+});
+
+let lastTitle = '', lastQuestions = [];
+function renderWorksheet(title, questions) {
+  lastTitle = title; lastQuestions = questions;
+  const wrap = document.getElementById('worksheetWrap');
+  const qHtml = questions.map(q => `
+    <li>
+      <span class="ws-q">${escapeHtml(q.prompt)}</span><span class="ws-type">[${q.typeLabel}]</span>
+      ${q.options
+        ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
+        : `<div class="ws-blank"></div>`}
+    </li>`).join('');
+  const keyHtml = questions.map(q => `<li>${escapeHtml(q.answer)}</li>`).join('');
+
+  wrap.innerHTML = `
+    <div class="ws-controls">
+      <button class="btn" id="reshuffleBtn">🔀 다시 섞기</button>
+      <button class="btn primary" id="printBtn">🖨️ 인쇄하기</button>
+      <label class="check-row"><input type="checkbox" id="showAnswers" checked> 정답지 포함</label>
+    </div>
+    <div class="worksheet" id="worksheetEl">
+      <div class="ws-header">
+        <h2>${escapeHtml(title)}</h2>
+        <div class="ws-meta"><span>이름: ______________</span><span>날짜: ______________</span><span>점수: ______ / ${questions.length}</span></div>
+      </div>
+      <ol class="ws-questions">${qHtml}</ol>
+      <div class="answer-key">
+        <h3>정답</h3>
+        <ol>${keyHtml}</ol>
+      </div>
+    </div>`;
+
+  document.getElementById('reshuffleBtn').addEventListener('click', () => {
+    document.getElementById('generateBtn').click();
+  });
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('showAnswers').addEventListener('change', e => {
+    document.getElementById('worksheetEl').classList.toggle('hide-answers', !e.target.checked);
+  });
+}
+
+/* ---------------- utils ---------------- */
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escapeAttr(str) { return escapeHtml(str); }
+
+/* ---------------- init ---------------- */
+renderWordList();
+</script>
+</body>
+</html>
