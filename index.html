@@ -61,6 +61,9 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .preview-table td.chk { width: 26px; text-align: center; }
 
 .quiz-options { display: flex; flex-direction: column; gap: 0.85rem; }
+.type-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; background: #fafaf8; border: 1px solid #e8e8e6; border-radius: 10px; padding: 0.75rem 0.9rem; }
+.type-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #333; font-weight: 400; cursor: pointer; }
+.type-check input { width: auto; }
 
 .worksheet { background: #fff; border: 1px solid #e8e8e6; border-radius: 14px; padding: 1.75rem; }
 .ws-header { text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #1a1a18; padding-bottom: 1rem; }
@@ -161,16 +164,19 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
       <h2>시험지 옵션</h2>
       <div class="quiz-options">
         <div class="field">
-          <label>문제 유형</label>
-          <select id="quizType">
-            <option value="meaning-write">단어 → 뜻 쓰기 (주관식)</option>
-            <option value="word-write">뜻 → 영단어 쓰기 (주관식)</option>
-            <option value="synonym-write">단어 → 동의어 쓰기 (주관식)</option>
-            <option value="antonym-write">단어 → 반의어 쓰기 (주관식)</option>
-            <option value="meaning-choice">단어 → 뜻 고르기 (4지선다)</option>
-            <option value="word-choice">뜻 → 단어 고르기 (4지선다)</option>
-            <option value="mixed">여러 유형 랜덤 혼합</option>
-          </select>
+          <label>문제 유형 (여러 개 체크하면 무작위로 섞여서 출제돼요)</label>
+          <div class="type-checks" id="typeChecks">
+            <label class="type-check"><input type="checkbox" class="type-chk" value="meaning-write" checked> 단어 → 뜻 쓰기 (주관식)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="word-write"> 뜻 → 영단어 쓰기 (주관식)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="synonym-write"> 단어 → 동의어 쓰기 (주관식)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="antonym-write"> 단어 → 반의어 쓰기 (주관식)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="meaning-choice"> 단어 → 뜻 고르기 (4지선다)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="word-choice"> 뜻 → 단어 고르기 (4지선다)</label>
+          </div>
+          <div class="btn-row">
+            <button class="btn small" id="selectAllTypesBtn">전체 선택</button>
+            <button class="btn small" id="clearAllTypesBtn">전체 해제</button>
+          </div>
         </div>
         <div class="row2">
           <div class="field"><label>문제 수</label><input type="number" id="quizCount" min="1" max="100" value="20"></div>
@@ -522,10 +528,10 @@ function sample(arr, n) {
 
 const CHOICE_LABELS = ['①', '②', '③', '④'];
 
-function poolForType(type) {
-  if (type === 'synonym-write') return words.filter(w => w.synonyms && w.synonyms.length);
-  if (type === 'antonym-write') return words.filter(w => w.antonyms && w.antonyms.length);
-  return words;
+function typeApplies(w, type) {
+  if (type === 'synonym-write') return !!(w.synonyms && w.synonyms.length);
+  if (type === 'antonym-write') return !!(w.antonyms && w.antonyms.length);
+  return true;
 }
 
 function buildQuestion(w, type, num) {
@@ -551,32 +557,32 @@ function buildQuestion(w, type, num) {
   }
 }
 
+document.getElementById('selectAllTypesBtn').addEventListener('click', () => {
+  document.querySelectorAll('.type-chk').forEach(c => c.checked = true);
+});
+document.getElementById('clearAllTypesBtn').addEventListener('click', () => {
+  document.querySelectorAll('.type-chk').forEach(c => c.checked = false);
+});
+
 document.getElementById('generateBtn').addEventListener('click', () => {
-  const type = document.getElementById('quizType').value;
+  const selectedTypes = Array.from(document.querySelectorAll('.type-chk:checked')).map(c => c.value);
   const countInput = parseInt(document.getElementById('quizCount').value, 10) || 20;
   const title = document.getElementById('quizTitle').value.trim() || '영어 단어 시험지';
 
   if (words.length === 0) { alert('단어장에 단어가 없어요. 먼저 단어를 추가해주세요.'); return; }
+  if (selectedTypes.length === 0) { alert('문제 유형을 하나 이상 선택해주세요.'); return; }
 
-  const usableTypes = ['meaning-write', 'word-write', 'synonym-write', 'antonym-write', 'meaning-choice', 'word-choice'];
-  const basePool = type === 'mixed' ? words : poolForType(type);
+  const basePool = words.filter(w => selectedTypes.some(t => typeApplies(w, t)));
   if (basePool.length === 0) {
-    alert('이 유형에 필요한 데이터(동의어 또는 반의어)가 있는 단어가 없어요.');
+    alert('선택한 유형에 필요한 데이터(동의어 또는 반의어)가 있는 단어가 없어요.');
     return;
   }
   const count = Math.min(countInput, basePool.length, 100);
   const chosen = shuffle(basePool).slice(0, count);
 
   const questions = chosen.map((w, idx) => {
-    let t = type;
-    if (type === 'mixed') {
-      const validTypes = usableTypes.filter(ct => {
-        if (ct === 'synonym-write') return w.synonyms && w.synonyms.length;
-        if (ct === 'antonym-write') return w.antonyms && w.antonyms.length;
-        return true;
-      });
-      t = validTypes[Math.floor(Math.random() * validTypes.length)];
-    }
+    const validTypes = selectedTypes.filter(t => typeApplies(w, t));
+    const t = validTypes[Math.floor(Math.random() * validTypes.length)];
     return buildQuestion(w, t, idx + 1);
   });
 
