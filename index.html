@@ -674,10 +674,51 @@ function renderWorksheet(title, sections, columns) {
   document.getElementById('reshuffleBtn').addEventListener('click', () => {
     document.getElementById('generateBtn').click();
   });
-  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('printBtn').addEventListener('click', () => printWorksheet(title));
   document.getElementById('showAnswers').addEventListener('change', e => {
     document.getElementById('worksheetEl').classList.toggle('hide-answers', !e.target.checked);
   });
+}
+
+const PRINT_DOC_CSS = `
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #2c2c2a; margin: 0; padding: 1.75rem; }
+.ws-header { text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #1a1a18; padding-bottom: 1rem; }
+.ws-header h2 { font-size: 19px; margin: 0 0 0.6rem; }
+.ws-meta { display: flex; justify-content: center; gap: 1.5rem; font-size: 13px; color: #444; }
+.ws-sections { counter-reset: q; display: flex; flex-direction: column; gap: 1.5rem; }
+.ws-instruction { font-size: 14px; font-weight: 600; color: #1a1a18; background: #f0f5fa; border-left: 3px solid #185FA5; padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; }
+.ws-questions { list-style: none; margin: 0; padding: 0; }
+.ws-questions li { counter-increment: q; padding: 0.65rem 0; border-bottom: 1px dashed #eee; break-inside: avoid; page-break-inside: avoid; }
+.ws-questions li::before { content: counter(q) ". "; font-weight: 600; color: #185FA5; }
+.ws-q { display: inline; font-size: 14.5px; }
+.ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
+.ws-slot { display: inline-flex; align-items: baseline; margin: 8px 1.75rem 0 0; font-size: 14.5px; }
+.ws-slot-eq { color: #185FA5; font-weight: 700; margin-right: 3px; }
+.ws-slot-letter { font-weight: 600; }
+.ws-slot-line { display: inline-block; width: 3.4em; border-bottom: 1px solid #999; height: 1.1em; margin-left: 2px; }
+.ws-slots { display: flex; flex-wrap: wrap; }
+.ws-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 8px; padding-left: 1.2rem; font-size: 13.5px; }
+.answer-key { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #1a1a18; page-break-before: always; }
+.answer-key h3 { font-size: 15px; margin: 0 0 0.75rem; }
+.answer-key ol { padding-left: 1.4rem; font-size: 13.5px; line-height: 1.9; columns: 2; margin: 0; }
+.hide-answers .answer-key { display: none; }
+`;
+
+function printWorksheet(title) {
+  const worksheetHtml = document.getElementById('worksheetEl').outerHTML;
+  const printWin = window.open('', '_blank');
+  if (!printWin) {
+    alert('인쇄 창을 열지 못했어요. 이 페이지가 미리보기(임베드) 화면에 떠 있다면, 브라우저 팝업 차단을 해제하거나 페이지를 새 탭에서 직접 연 뒤 다시 시도해주세요.');
+    return;
+  }
+  printWin.document.open();
+  printWin.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title><style>${PRINT_DOC_CSS}</style></head><body>${worksheetHtml}</body></html>`);
+  printWin.document.close();
+  printWin.onload = () => {
+    printWin.focus();
+    printWin.print();
+  };
 }
 
 /* ---------------- utils ---------------- */
