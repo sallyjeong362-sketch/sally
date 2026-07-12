@@ -75,6 +75,9 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .ws-q { display: inline; font-size: 14.5px; }
 .ws-type { font-size: 11px; color: #aaa; margin-left: 6px; }
 .ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
+.ws-eq { margin: 0 8px; color: #185FA5; font-weight: 700; }
+.ws-hint { font-family: 'Courier New', monospace; font-weight: 600; letter-spacing: 1px; }
+.ws-questions li { break-inside: avoid; page-break-inside: avoid; }
 .ws-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 8px; padding-left: 1.2rem; font-size: 13.5px; }
 .answer-key { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #1a1a18; }
 .answer-key h3 { font-size: 15px; margin-bottom: 0.75rem; }
@@ -178,9 +181,17 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
             <button class="btn small" id="clearAllTypesBtn">전체 해제</button>
           </div>
         </div>
-        <div class="row2">
+        <div class="row3">
           <div class="field"><label>문제 수</label><input type="number" id="quizCount" min="1" max="100" value="20"></div>
           <div class="field"><label>시험지 제목</label><input type="text" id="quizTitle" value="영어 단어 시험지"></div>
+          <div class="field">
+            <label>지면 단수</label>
+            <select id="quizColumns">
+              <option value="1">1단</option>
+              <option value="2">2단</option>
+              <option value="3">3단</option>
+            </select>
+          </div>
         </div>
         <div class="btn-row">
           <button class="btn primary" id="generateBtn">시험지 만들기</button>
@@ -528,6 +539,12 @@ function sample(arr, n) {
 
 const CHOICE_LABELS = ['①', '②', '③', '④'];
 
+function letterHint(word) {
+  const clean = (word || '').trim();
+  if (clean.length <= 1) return clean;
+  return clean.charAt(0) + ' ' + Array(clean.length - 1).fill('_').join(' ');
+}
+
 function typeApplies(w, type) {
   if (type === 'synonym-write') return !!(w.synonyms && w.synonyms.length);
   if (type === 'antonym-write') return !!(w.antonyms && w.antonyms.length);
@@ -541,7 +558,7 @@ function buildQuestion(w, type, num) {
     case 'word-write':
       return { num, prompt: w.meaning || w.word, answer: w.word, typeLabel: '주관식' };
     case 'synonym-write':
-      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어' };
+      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hint: letterHint(w.synonyms[0]) };
     case 'antonym-write':
       return { num, prompt: w.word, answer: w.antonyms.join(', '), typeLabel: '반의어' };
     case 'meaning-choice': {
@@ -586,21 +603,25 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     return buildQuestion(w, t, idx + 1);
   });
 
-  renderWorksheet(title, questions);
+  const columns = document.getElementById('quizColumns').value;
+  renderWorksheet(title, questions, columns);
 });
 
 let lastTitle = '', lastQuestions = [];
-function renderWorksheet(title, questions) {
+function renderWorksheet(title, questions, columns) {
   lastTitle = title; lastQuestions = questions;
   const wrap = document.getElementById('worksheetWrap');
   const qHtml = questions.map(q => `
     <li>
-      <span class="ws-q">${escapeHtml(q.prompt)}</span><span class="ws-type">[${q.typeLabel}]</span>
+      <span class="ws-q">${escapeHtml(q.prompt)}${q.hint
+        ? ` <span class="ws-eq">=</span> <span class="ws-hint">${escapeHtml(q.hint)}</span>`
+        : ''}</span><span class="ws-type">[${q.typeLabel}]</span>
       ${q.options
         ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
-        : `<div class="ws-blank"></div>`}
+        : (q.hint ? '' : `<div class="ws-blank"></div>`)}
     </li>`).join('');
   const keyHtml = questions.map(q => `<li>${escapeHtml(q.answer)}</li>`).join('');
+  const colStyle = `column-count:${columns}; column-gap:2rem;`;
 
   wrap.innerHTML = `
     <div class="ws-controls">
@@ -613,7 +634,7 @@ function renderWorksheet(title, questions) {
         <h2>${escapeHtml(title)}</h2>
         <div class="ws-meta"><span>이름: ______________</span><span>날짜: ______________</span><span>점수: ______ / ${questions.length}</span></div>
       </div>
-      <ol class="ws-questions">${qHtml}</ol>
+      <ol class="ws-questions" style="${colStyle}">${qHtml}</ol>
       <div class="answer-key">
         <h3>정답</h3>
         <ol>${keyHtml}</ol>
