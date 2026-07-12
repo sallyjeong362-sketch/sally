@@ -69,11 +69,12 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .ws-header { text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #1a1a18; padding-bottom: 1rem; }
 .ws-header h2 { font-size: 19px; margin-bottom: 0.6rem; }
 .ws-meta { display: flex; justify-content: center; gap: 1.5rem; font-size: 13px; color: #444; }
-.ws-questions { list-style: none; counter-reset: q; }
+.ws-sections { counter-reset: q; display: flex; flex-direction: column; gap: 1.5rem; }
+.ws-instruction { font-size: 14px; font-weight: 600; color: #1a1a18; background: #f0f5fa; border-left: 3px solid #185FA5; padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; }
+.ws-questions { list-style: none; }
 .ws-questions li { counter-increment: q; padding: 0.65rem 0; border-bottom: 1px dashed #eee; }
 .ws-questions li::before { content: counter(q) ". "; font-weight: 600; color: #185FA5; }
 .ws-q { display: inline; font-size: 14.5px; }
-.ws-type { font-size: 11px; color: #aaa; margin-left: 6px; }
 .ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
 .ws-slot { display: inline-flex; align-items: baseline; margin: 8px 1.75rem 0 0; font-size: 14.5px; }
 .ws-slot-eq { color: #185FA5; font-weight: 700; margin-right: 3px; }
@@ -552,25 +553,35 @@ function typeApplies(w, type) {
   return true;
 }
 
+const TYPE_ORDER = ['meaning-write', 'word-write', 'synonym-write', 'antonym-write', 'meaning-choice', 'word-choice'];
+const TYPE_INSTRUCTIONS = {
+  'meaning-write': '다음 단어의 뜻을 쓰시오.',
+  'word-write': '다음 뜻에 해당하는 영어 단어를 쓰시오.',
+  'synonym-write': '다음 단어의 동의어를 모두 쓰시오.',
+  'antonym-write': '다음 단어의 반의어를 모두 쓰시오.',
+  'meaning-choice': '다음 단어의 알맞은 뜻을 고르시오.',
+  'word-choice': '다음 뜻에 해당하는 단어를 고르시오.'
+};
+
 function buildQuestion(w, type, num) {
   switch (type) {
     case 'meaning-write':
-      return { num, prompt: w.word, answer: w.meaning || '(뜻 없음)', typeLabel: '주관식' };
+      return { num, prompt: w.word, answer: w.meaning || '(뜻 없음)' };
     case 'word-write':
-      return { num, prompt: w.meaning || w.word, answer: w.word, typeLabel: '주관식' };
+      return { num, prompt: w.meaning || w.word, answer: w.word };
     case 'synonym-write':
-      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hintLetters: synonymHintLetters(w.synonyms) };
+      return { num, prompt: w.word, answer: w.synonyms.join(', '), hintLetters: synonymHintLetters(w.synonyms) };
     case 'antonym-write':
-      return { num, prompt: w.word, answer: w.antonyms.join(', '), typeLabel: '반의어' };
+      return { num, prompt: w.word, answer: w.antonyms.join(', ') };
     case 'meaning-choice': {
       const distractors = sample(words.filter(x => x.id !== w.id && x.meaning), 3).map(x => x.meaning);
       const options = shuffle([w.meaning || '(뜻 없음)', ...distractors]);
-      return { num, prompt: w.word, options, answer: w.meaning || '(뜻 없음)', typeLabel: '객관식' };
+      return { num, prompt: w.word, options, answer: w.meaning || '(뜻 없음)' };
     }
     case 'word-choice': {
       const distractors = sample(words.filter(x => x.id !== w.id), 3).map(x => x.word);
       const options = shuffle([w.word, ...distractors]);
-      return { num, prompt: w.meaning || w.word, options, answer: w.word, typeLabel: '객관식' };
+      return { num, prompt: w.meaning || w.word, options, answer: w.word };
     }
   }
 }
@@ -598,31 +609,49 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   const count = Math.min(countInput, basePool.length, 100);
   const chosen = shuffle(basePool).slice(0, count);
 
-  const questions = chosen.map((w, idx) => {
+  const assigned = chosen.map(w => {
     const validTypes = selectedTypes.filter(t => typeApplies(w, t));
     const t = validTypes[Math.floor(Math.random() * validTypes.length)];
-    return buildQuestion(w, t, idx + 1);
+    return { w, t };
   });
 
+  let num = 0;
+  const sections = TYPE_ORDER
+    .filter(t => selectedTypes.includes(t))
+    .map(t => ({
+      type: t,
+      instruction: TYPE_INSTRUCTIONS[t],
+      questions: assigned.filter(a => a.t === t).map(a => buildQuestion(a.w, t, ++num))
+    }))
+    .filter(s => s.questions.length > 0);
+
   const columns = document.getElementById('quizColumns').value;
-  renderWorksheet(title, questions, columns);
+  renderWorksheet(title, sections, columns);
 });
 
-let lastTitle = '', lastQuestions = [];
-function renderWorksheet(title, questions, columns) {
-  lastTitle = title; lastQuestions = questions;
+function renderWorksheet(title, sections, columns) {
   const wrap = document.getElementById('worksheetWrap');
-  const qHtml = questions.map(q => `
-    <li>
-      <span class="ws-q">${escapeHtml(q.prompt)}</span><span class="ws-type">[${q.typeLabel}]</span>
-      ${q.options
-        ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
-        : (q.hintLetters
-          ? `<div class="ws-slots">${q.hintLetters.map(l => `<span class="ws-slot"><span class="ws-slot-eq">=</span><span class="ws-slot-letter">${escapeHtml(l)}</span><span class="ws-slot-line"></span></span>`).join('')}</div>`
-          : `<div class="ws-blank"></div>`)}
-    </li>`).join('');
-  const keyHtml = questions.map(q => `<li>${escapeHtml(q.answer)}</li>`).join('');
+  const totalCount = sections.reduce((sum, s) => sum + s.questions.length, 0);
   const colStyle = `column-count:${columns}; column-gap:2rem;`;
+
+  const sectionsHtml = sections.map(s => {
+    const qHtml = s.questions.map(q => `
+      <li>
+        <span class="ws-q">${escapeHtml(q.prompt)}</span>
+        ${q.options
+          ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
+          : (q.hintLetters
+            ? `<div class="ws-slots">${q.hintLetters.map(l => `<span class="ws-slot"><span class="ws-slot-eq">=</span><span class="ws-slot-letter">${escapeHtml(l)}</span><span class="ws-slot-line"></span></span>`).join('')}</div>`
+            : `<div class="ws-blank"></div>`)}
+      </li>`).join('');
+    return `
+      <div class="ws-section">
+        <div class="ws-instruction">※ ${escapeHtml(s.instruction)}</div>
+        <ol class="ws-questions" style="${colStyle}">${qHtml}</ol>
+      </div>`;
+  }).join('');
+
+  const keyHtml = sections.flatMap(s => s.questions).map(q => `<li>${escapeHtml(q.answer)}</li>`).join('');
 
   wrap.innerHTML = `
     <div class="ws-controls">
@@ -633,9 +662,9 @@ function renderWorksheet(title, questions, columns) {
     <div class="worksheet" id="worksheetEl">
       <div class="ws-header">
         <h2>${escapeHtml(title)}</h2>
-        <div class="ws-meta"><span>이름: ______________</span><span>날짜: ______________</span><span>점수: ______ / ${questions.length}</span></div>
+        <div class="ws-meta"><span>이름: ______________</span><span>날짜: ______________</span><span>점수: ______ / ${totalCount}</span></div>
       </div>
-      <ol class="ws-questions" style="${colStyle}">${qHtml}</ol>
+      <div class="ws-sections">${sectionsHtml}</div>
       <div class="answer-key">
         <h3>정답</h3>
         <ol>${keyHtml}</ol>
