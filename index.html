@@ -76,7 +76,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .ws-type { font-size: 11px; color: #aaa; margin-left: 6px; }
 .ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
 .ws-eq { margin: 0 8px; color: #185FA5; font-weight: 700; }
-.ws-hint { font-family: 'Courier New', monospace; font-weight: 600; letter-spacing: 1px; }
+.ws-hint { font-weight: 600; color: #185FA5; }
 .ws-questions li { break-inside: avoid; page-break-inside: avoid; }
 .ws-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 8px; padding-left: 1.2rem; font-size: 13.5px; }
 .answer-key { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #1a1a18; }
@@ -539,10 +539,8 @@ function sample(arr, n) {
 
 const CHOICE_LABELS = ['①', '②', '③', '④'];
 
-function letterHint(word) {
-  const clean = (word || '').trim();
-  if (clean.length <= 1) return clean;
-  return clean.charAt(0) + ' ' + Array(clean.length - 1).fill('_').join(' ');
+function synonymHint(synonyms) {
+  return (synonyms || []).map(s => s.trim().charAt(0)).filter(Boolean).join(', ');
 }
 
 function typeApplies(w, type) {
@@ -558,7 +556,7 @@ function buildQuestion(w, type, num) {
     case 'word-write':
       return { num, prompt: w.meaning || w.word, answer: w.word, typeLabel: '주관식' };
     case 'synonym-write':
-      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hint: letterHint(w.synonyms[0]) };
+      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hint: synonymHint(w.synonyms) };
     case 'antonym-write':
       return { num, prompt: w.word, answer: w.antonyms.join(', '), typeLabel: '반의어' };
     case 'meaning-choice': {
