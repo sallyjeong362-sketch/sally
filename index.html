@@ -75,8 +75,11 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .ws-q { display: inline; font-size: 14.5px; }
 .ws-type { font-size: 11px; color: #aaa; margin-left: 6px; }
 .ws-blank { margin-top: 8px; border-bottom: 1px solid #ccc; height: 1.4em; }
-.ws-eq { margin: 0 8px; color: #185FA5; font-weight: 700; }
-.ws-hint { font-weight: 600; color: #185FA5; }
+.ws-slot { display: inline-flex; align-items: baseline; margin: 8px 1.75rem 0 0; font-size: 14.5px; }
+.ws-slot-eq { color: #185FA5; font-weight: 700; margin-right: 3px; }
+.ws-slot-letter { font-weight: 600; }
+.ws-slot-line { display: inline-block; width: 3.4em; border-bottom: 1px solid #999; height: 1.1em; margin-left: 2px; }
+.ws-slots { display: flex; flex-wrap: wrap; }
 .ws-questions li { break-inside: avoid; page-break-inside: avoid; }
 .ws-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 8px; padding-left: 1.2rem; font-size: 13.5px; }
 .answer-key { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #1a1a18; }
@@ -539,8 +542,8 @@ function sample(arr, n) {
 
 const CHOICE_LABELS = ['①', '②', '③', '④'];
 
-function synonymHint(synonyms) {
-  return (synonyms || []).map(s => s.trim().charAt(0)).filter(Boolean).join(', ');
+function synonymHintLetters(synonyms) {
+  return (synonyms || []).map(s => s.trim().charAt(0)).filter(Boolean);
 }
 
 function typeApplies(w, type) {
@@ -556,7 +559,7 @@ function buildQuestion(w, type, num) {
     case 'word-write':
       return { num, prompt: w.meaning || w.word, answer: w.word, typeLabel: '주관식' };
     case 'synonym-write':
-      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hint: synonymHint(w.synonyms) };
+      return { num, prompt: w.word, answer: w.synonyms.join(', '), typeLabel: '동의어', hintLetters: synonymHintLetters(w.synonyms) };
     case 'antonym-write':
       return { num, prompt: w.word, answer: w.antonyms.join(', '), typeLabel: '반의어' };
     case 'meaning-choice': {
@@ -611,12 +614,12 @@ function renderWorksheet(title, questions, columns) {
   const wrap = document.getElementById('worksheetWrap');
   const qHtml = questions.map(q => `
     <li>
-      <span class="ws-q">${escapeHtml(q.prompt)}${q.hint
-        ? ` <span class="ws-eq">=</span> <span class="ws-hint">${escapeHtml(q.hint)}</span>`
-        : ''}</span><span class="ws-type">[${q.typeLabel}]</span>
+      <span class="ws-q">${escapeHtml(q.prompt)}</span><span class="ws-type">[${q.typeLabel}]</span>
       ${q.options
         ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
-        : (q.hint ? '' : `<div class="ws-blank"></div>`)}
+        : (q.hintLetters
+          ? `<div class="ws-slots">${q.hintLetters.map(l => `<span class="ws-slot"><span class="ws-slot-eq">=</span><span class="ws-slot-letter">${escapeHtml(l)}</span><span class="ws-slot-line"></span></span>`).join('')}</div>`
+          : `<div class="ws-blank"></div>`)}
     </li>`).join('');
   const keyHtml = questions.map(q => `<li>${escapeHtml(q.answer)}</li>`).join('');
   const colStyle = `column-count:${columns}; column-gap:2rem;`;
