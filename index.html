@@ -303,6 +303,7 @@ function renderWordList() {
           <span class="group-toggle">${isOpen ? '▾' : '▸'}</span>
           <span class="group-name">${escapeHtml(g)}</span>
           <span class="group-count">${list.length}개</span>
+          <button class="btn small" onclick="event.stopPropagation(); renameGroup('${escapeAttr(g)}')">이름 수정</button>
           <button class="btn small danger" onclick="event.stopPropagation(); deleteGroupWords('${escapeAttr(g)}')">그룹 삭제</button>
         </div>
         ${isOpen ? renderWordTable(list, false) : ''}
@@ -362,6 +363,20 @@ function deleteGroupWords(g) {
   if (!confirm(`"${g}" 그룹의 단어 ${count}개를 모두 삭제할까요? 되돌릴 수 없습니다.`)) return;
   words = words.filter(w => getGroupOf(w) !== g);
   openGroups.delete(g);
+  saveWords();
+  renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
+}
+function renameGroup(oldName) {
+  const input = prompt(`"${oldName}" 그룹의 새 이름을 입력하세요.`, oldName);
+  if (input === null) return;
+  const newName = input.trim();
+  if (!newName) { alert('그룹 이름은 비워둘 수 없어요.'); return; }
+  if (newName === oldName) return;
+  words.forEach(w => { if (getGroupOf(w) === oldName) w.group = newName; });
+  if (openGroups.has(oldName)) { openGroups.delete(oldName); openGroups.add(newName); }
+  if (uncheckedGroups.has(oldName)) { uncheckedGroups.delete(oldName); uncheckedGroups.add(newName); }
   saveWords();
   renderWordList();
   refreshGroupOptions();
