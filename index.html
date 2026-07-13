@@ -65,6 +65,14 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .type-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #333; font-weight: 400; cursor: pointer; }
 .type-check input { width: auto; }
 
+.group-block { border: 1px solid #e8e8e6; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.group-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fafaf8; cursor: pointer; user-select: none; }
+.group-header:hover { background: #f0f0ee; }
+.group-toggle { font-size: 11px; color: #888; width: 10px; }
+.group-name { font-size: 14px; font-weight: 600; color: #1a1a18; flex: 1; }
+.group-count { font-size: 12px; color: #888; }
+.group-block .word-table { padding: 4px; }
+
 .worksheet { background: #fff; border: 1px solid #e8e8e6; border-radius: 14px; padding: 1.75rem; }
 .ws-header { text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #1a1a18; padding-bottom: 1rem; }
 .ws-header h2 { font-size: 19px; margin-bottom: 0.6rem; }
@@ -108,6 +116,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 <div class="app">
   <h1>📘 나만의 영어 단어장</h1>
   <p class="subtitle">단어·뜻·동의어·반의어를 모아두고, 랜덤으로 섞어 오프라인 시험지를 인쇄해보세요</p>
+  <datalist id="groupOptions"></datalist>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="list">📖 단어장 <span class="count-badge" id="wordCountBadge">0</span></button>
@@ -136,6 +145,10 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   <section id="tab-add" class="tab-panel">
     <div class="card">
       <h2>직접 추가</h2>
+      <div class="field">
+        <label>그룹 / Day (예: Day1 — 비워두면 미분류로 저장돼요)</label>
+        <input type="text" id="manualGroup" list="groupOptions" placeholder="예: Day1">
+      </div>
       <div class="row2">
         <div class="field"><label>단어 (영어)</label><input type="text" id="manualWord" placeholder="예: abandon"></div>
         <div class="field"><label>뜻 (한글)</label><input type="text" id="manualMeaning" placeholder="예: 버리다, 포기하다"></div>
@@ -155,6 +168,10 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
         지원 형식 2 (줄바꿈 형식): <code>abandon - 버리다</code> 다음 줄에 <code>동의어: desert, forsake</code>, <code>반의어: keep, maintain</code>
       </p>
       <div class="field">
+        <label>그룹 / Day (이 붙여넣기 전체에 적용, 예: Day1)</label>
+        <input type="text" id="pasteGroup" list="groupOptions" placeholder="예: Day1">
+      </div>
+      <div class="field">
         <textarea id="pasteArea" placeholder="여기에 단어 목록을 붙여넣으세요..."></textarea>
       </div>
       <div class="btn-row">
@@ -170,6 +187,14 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
     <div class="card">
       <h2>시험지 옵션</h2>
       <div class="quiz-options">
+        <div class="field">
+          <label>포함할 그룹 / Day (체크한 그룹의 단어만 출제돼요)</label>
+          <div class="type-checks" id="groupChecks"></div>
+          <div class="btn-row">
+            <button class="btn small" id="selectAllGroupsBtn">전체 선택</button>
+            <button class="btn small" id="clearAllGroupsBtn">전체 해제</button>
+          </div>
+        </div>
         <div class="field">
           <label>문제 유형 (여러 개 체크하면 무작위로 섞여서 출제돼요)</label>
           <div class="type-checks" id="typeChecks">
@@ -225,6 +250,15 @@ function genId() {
   return 'w_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+const DEFAULT_GROUP = '미분류';
+function getGroupOf(w) { return (w.group && w.group.trim()) || DEFAULT_GROUP; }
+function naturalCompare(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
+function getUniqueGroups() { return Array.from(new Set(words.map(getGroupOf))).sort(naturalCompare); }
+function refreshGroupOptions() {
+  const dl = document.getElementById('groupOptions');
+  dl.innerHTML = getUniqueGroups().map(g => `<option value="${escapeAttr(g)}">`).join('');
+}
+
 /* ---------------- tabs ---------------- */
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -238,27 +272,53 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 /* ---------------- word list rendering ---------------- */
 let editingId = null;
 let searchTerm = '';
+let openGroups = new Set();
 
 function renderWordList() {
   document.getElementById('wordCountBadge').textContent = words.length;
   const wrap = document.getElementById('wordListWrap');
-  const filtered = words.filter(w =>
-    !searchTerm ||
-    w.word.toLowerCase().includes(searchTerm) ||
-    w.meaning.toLowerCase().includes(searchTerm)
-  );
   if (words.length === 0) {
     wrap.innerHTML = '<p class="empty-note">아직 등록된 단어가 없어요. "데이터 추가" 탭에서 단어를 추가해보세요.</p>';
     return;
   }
-  if (filtered.length === 0) {
-    wrap.innerHTML = '<p class="empty-note">검색 결과가 없어요.</p>';
+
+  if (searchTerm) {
+    const filtered = words.filter(w =>
+      w.word.toLowerCase().includes(searchTerm) ||
+      w.meaning.toLowerCase().includes(searchTerm)
+    );
+    wrap.innerHTML = filtered.length === 0
+      ? '<p class="empty-note">검색 결과가 없어요.</p>'
+      : renderWordTable(filtered, true);
     return;
   }
-  const rows = filtered.map(w => {
+
+  const groups = getUniqueGroups();
+  wrap.innerHTML = groups.map(g => {
+    const list = words.filter(w => getGroupOf(w) === g);
+    const isOpen = openGroups.has(g);
+    return `
+      <div class="group-block">
+        <div class="group-header" onclick="toggleGroup('${escapeAttr(g)}')">
+          <span class="group-toggle">${isOpen ? '▾' : '▸'}</span>
+          <span class="group-name">${escapeHtml(g)}</span>
+          <span class="group-count">${list.length}개</span>
+          <button class="btn small danger" onclick="event.stopPropagation(); deleteGroupWords('${escapeAttr(g)}')">그룹 삭제</button>
+        </div>
+        ${isOpen ? renderWordTable(list, false) : ''}
+      </div>`;
+  }).join('');
+}
+
+function renderWordTable(list, showGroupCol) {
+  const colCount = showGroupCol ? 5 : 4;
+  const rows = list.map(w => {
     if (editingId === w.id) {
       return `<tr>
-        <td colspan="4">
+        <td colspan="${colCount}">
+          <div class="field" style="margin-bottom:6px;">
+            <input type="text" id="edit-group" value="${escapeAttr(w.group || '')}" list="groupOptions" placeholder="그룹/Day (예: Day1)">
+          </div>
           <div class="row2" style="margin-bottom:6px;">
             <input type="text" id="edit-word" value="${escapeAttr(w.word)}">
             <input type="text" id="edit-meaning" value="${escapeAttr(w.meaning)}">
@@ -273,6 +333,7 @@ function renderWordList() {
       </tr>`;
     }
     return `<tr>
+      ${showGroupCol ? `<td>${escapeHtml(getGroupOf(w))}</td>` : ''}
       <td><strong>${escapeHtml(w.word)}</strong></td>
       <td>${escapeHtml(w.meaning) || '<span class="muted">-</span>'}</td>
       <td>${renderTags(w.synonyms, 'syn')}${renderTags(w.antonyms, 'anto')}</td>
@@ -282,8 +343,8 @@ function renderWordList() {
       </td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<table class="word-table">
-    <thead><tr><th>단어</th><th>뜻</th><th>동의어 / 반의어</th><th></th></tr></thead>
+  return `<table class="word-table">
+    <thead><tr>${showGroupCol ? '<th>그룹</th>' : ''}<th>단어</th><th>뜻</th><th>동의어 / 반의어</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -291,11 +352,27 @@ function renderTags(list, cls) {
   if (!list || !list.length) return '';
   return list.map(t => `<span class="tag ${cls === 'anto' ? 'anto' : ''}">${escapeHtml(t)}</span>`).join('');
 }
+function toggleGroup(g) {
+  if (openGroups.has(g)) openGroups.delete(g);
+  else openGroups.add(g);
+  renderWordList();
+}
+function deleteGroupWords(g) {
+  const count = words.filter(w => getGroupOf(w) === g).length;
+  if (!confirm(`"${g}" 그룹의 단어 ${count}개를 모두 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  words = words.filter(w => getGroupOf(w) !== g);
+  openGroups.delete(g);
+  saveWords();
+  renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
+}
 function startEdit(id) { editingId = id; renderWordList(); }
 function cancelEdit() { editingId = null; renderWordList(); }
 function saveEdit(id) {
   const w = words.find(x => x.id === id);
   if (!w) return;
+  w.group = document.getElementById('edit-group').value.trim();
   w.word = document.getElementById('edit-word').value.trim();
   w.meaning = document.getElementById('edit-meaning').value.trim();
   w.synonyms = splitList(document.getElementById('edit-syn').value);
@@ -303,12 +380,16 @@ function saveEdit(id) {
   editingId = null;
   saveWords();
   renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
 }
 function deleteWord(id) {
   if (!confirm('이 단어를 삭제할까요?')) return;
   words = words.filter(x => x.id !== id);
   saveWords();
   renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
 }
 document.getElementById('searchBox').addEventListener('input', e => {
   searchTerm = e.target.value.trim().toLowerCase();
@@ -320,6 +401,31 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
   words = [];
   saveWords();
   renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
+});
+
+/* ---------------- group filter (test tab) ---------------- */
+let uncheckedGroups = new Set();
+
+function renderGroupFilter() {
+  const wrap = document.getElementById('groupChecks');
+  const groups = getUniqueGroups();
+  if (groups.length === 0) {
+    wrap.innerHTML = '<p class="empty-note">등록된 그룹이 없어요.</p>';
+    return;
+  }
+  wrap.innerHTML = groups.map(g => `
+    <label class="type-check"><input type="checkbox" class="group-chk" value="${escapeAttr(g)}" ${uncheckedGroups.has(g) ? '' : 'checked'}> ${escapeHtml(g)}</label>
+  `).join('');
+}
+document.getElementById('selectAllGroupsBtn').addEventListener('click', () => {
+  uncheckedGroups.clear();
+  renderGroupFilter();
+});
+document.getElementById('clearAllGroupsBtn').addEventListener('click', () => {
+  uncheckedGroups = new Set(getUniqueGroups());
+  renderGroupFilter();
 });
 
 /* ---------------- export / import ---------------- */
@@ -353,12 +459,15 @@ document.getElementById('importFile').addEventListener('change', e => {
           meaning: String(d.meaning || '').trim(),
           synonyms: Array.isArray(d.synonyms) ? d.synonyms : splitList(d.synonyms || ''),
           antonyms: Array.isArray(d.antonyms) ? d.antonyms : splitList(d.antonyms || ''),
+          group: d.group ? String(d.group).trim() : '',
           createdAt: Date.now()
         });
         added++;
       });
       saveWords();
       renderWordList();
+      refreshGroupOptions();
+      renderGroupFilter();
       alert(added + '개의 단어를 불러왔어요. (중복 단어는 건너뜀)');
     } catch (err) {
       alert('올바른 백업 파일이 아니에요.');
@@ -374,13 +483,16 @@ document.getElementById('manualAddBtn').addEventListener('click', () => {
   const meaning = document.getElementById('manualMeaning').value.trim();
   const synonyms = splitList(document.getElementById('manualSyn').value);
   const antonyms = splitList(document.getElementById('manualAnt').value);
+  const group = document.getElementById('manualGroup').value.trim();
   if (!word) { alert('단어를 입력해주세요.'); return; }
   if (words.some(w => w.word.toLowerCase() === word.toLowerCase())) {
     if (!confirm('이미 등록된 단어예요. 그래도 추가할까요?')) return;
   }
-  words.push({ id: genId(), word, meaning, synonyms, antonyms, createdAt: Date.now() });
+  words.push({ id: genId(), word, meaning, synonyms, antonyms, group, createdAt: Date.now() });
   saveWords();
   renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
   ['manualWord', 'manualMeaning', 'manualSyn', 'manualAnt'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('manualWord').focus();
 });
@@ -507,6 +619,7 @@ function removeParsedRow(i) {
   renderParsePreview();
 }
 function commitParsedRows() {
+  const group = document.getElementById('pasteGroup').value.trim();
   let added = 0, skipped = 0;
   parsedRows.filter(r => r.include && r.word).forEach(r => {
     if (words.some(w => w.word.toLowerCase() === r.word.toLowerCase())) { skipped++; return; }
@@ -516,16 +629,19 @@ function commitParsedRows() {
       meaning: (r.meaning || '').trim(),
       synonyms: r.synonyms || [],
       antonyms: r.antonyms || [],
+      group,
       createdAt: Date.now()
     });
     added++;
   });
   saveWords();
   renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
   parsedRows = [];
   document.getElementById('parsePreviewWrap').innerHTML = '';
   document.getElementById('pasteArea').value = '';
-  alert(added + '개 추가되었어요.' + (skipped ? ' (' + skipped + '개는 중복이라 건너뜀)' : ''));
+  alert(added + '개 추가되었어요.' + (skipped ? ' (' + skipped + '개는 중복이라 건너뜀)' : '') + (group ? ` [그룹: ${group}]` : ''));
 }
 
 /* ---------------- test / worksheet generation ---------------- */
@@ -595,15 +711,17 @@ document.getElementById('clearAllTypesBtn').addEventListener('click', () => {
 
 document.getElementById('generateBtn').addEventListener('click', () => {
   const selectedTypes = Array.from(document.querySelectorAll('.type-chk:checked')).map(c => c.value);
+  const selectedGroups = Array.from(document.querySelectorAll('.group-chk:checked')).map(c => c.value);
   const countInput = parseInt(document.getElementById('quizCount').value, 10) || 20;
   const title = document.getElementById('quizTitle').value.trim() || '영어 단어 시험지';
 
   if (words.length === 0) { alert('단어장에 단어가 없어요. 먼저 단어를 추가해주세요.'); return; }
   if (selectedTypes.length === 0) { alert('문제 유형을 하나 이상 선택해주세요.'); return; }
+  if (selectedGroups.length === 0) { alert('그룹/Day를 하나 이상 선택해주세요.'); return; }
 
-  const basePool = words.filter(w => selectedTypes.some(t => typeApplies(w, t)));
+  const basePool = words.filter(w => selectedGroups.includes(getGroupOf(w)) && selectedTypes.some(t => typeApplies(w, t)));
   if (basePool.length === 0) {
-    alert('선택한 유형에 필요한 데이터(동의어 또는 반의어)가 있는 단어가 없어요.');
+    alert('선택한 그룹과 유형 조건에 맞는 단어가 없어요.');
     return;
   }
   const count = Math.min(countInput, basePool.length, 100);
@@ -688,6 +806,8 @@ function escapeAttr(str) { return escapeHtml(str); }
 
 /* ---------------- init ---------------- */
 renderWordList();
+refreshGroupOptions();
+renderGroupFilter();
 </script>
 </body>
 </html>
