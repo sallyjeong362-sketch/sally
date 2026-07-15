@@ -201,6 +201,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
             <label class="type-check"><input type="checkbox" class="type-chk" value="meaning-write" checked> 단어 → 뜻 쓰기 (주관식)</label>
             <label class="type-check"><input type="checkbox" class="type-chk" value="word-write"> 뜻 → 영단어 쓰기 (주관식)</label>
             <label class="type-check"><input type="checkbox" class="type-chk" value="synonym-write"> 단어 → 동의어 쓰기 (주관식)</label>
+            <label class="type-check"><input type="checkbox" class="type-chk" value="synonym-choice"> 단어 → 동의어 모두 고르기 (객관식)</label>
             <label class="type-check"><input type="checkbox" class="type-chk" value="antonym-write"> 단어 → 반의어 쓰기 (주관식)</label>
             <label class="type-check"><input type="checkbox" class="type-chk" value="meaning-choice"> 단어 → 뜻 고르기 (4지선다)</label>
             <label class="type-check"><input type="checkbox" class="type-chk" value="word-choice"> 뜻 → 단어 고르기 (4지선다)</label>
@@ -679,16 +680,17 @@ function synonymHintLetters(synonyms) {
 }
 
 function typeApplies(w, type) {
-  if (type === 'synonym-write') return !!(w.synonyms && w.synonyms.length);
+  if (type === 'synonym-write' || type === 'synonym-choice') return !!(w.synonyms && w.synonyms.length);
   if (type === 'antonym-write') return !!(w.antonyms && w.antonyms.length);
   return true;
 }
 
-const TYPE_ORDER = ['meaning-write', 'word-write', 'synonym-write', 'antonym-write', 'meaning-choice', 'word-choice'];
+const TYPE_ORDER = ['meaning-write', 'word-write', 'synonym-write', 'synonym-choice', 'antonym-write', 'meaning-choice', 'word-choice'];
 const TYPE_INSTRUCTIONS = {
   'meaning-write': '다음 단어의 뜻을 쓰시오.',
   'word-write': '다음 뜻에 해당하는 영어 단어를 쓰시오.',
   'synonym-write': '다음 단어의 동의어를 모두 쓰시오.',
+  'synonym-choice': '다음 단어의 동의어를 보기에서 모두 고르시오.',
   'antonym-write': '다음 단어의 반의어를 모두 쓰시오.',
   'meaning-choice': '다음 단어의 알맞은 뜻을 고르시오.',
   'word-choice': '다음 뜻에 해당하는 단어를 고르시오.'
@@ -702,6 +704,22 @@ function buildQuestion(w, type, num) {
       return { num, prompt: w.meaning || w.word, answer: w.word };
     case 'synonym-write':
       return { num, prompt: w.word, answer: w.synonyms.join(', '), hintLetters: synonymHintLetters(w.synonyms) };
+    case 'synonym-choice': {
+      const correct = w.synonyms.slice();
+      const correctLower = new Set(correct.map(s => s.toLowerCase()));
+      const candidatePool = [];
+      words.forEach(x => {
+        if (x.id === w.id) return;
+        candidatePool.push(x.word);
+        (x.synonyms || []).forEach(s => candidatePool.push(s));
+      });
+      const uniqueCandidates = Array.from(new Set(
+        candidatePool.filter(c => c && !correctLower.has(c.toLowerCase()) && c.toLowerCase() !== w.word.toLowerCase())
+      ));
+      const distractors = sample(uniqueCandidates, 3);
+      const options = shuffle([...correct, ...distractors]);
+      return { num, prompt: w.word, options, multi: true, answer: correct.join(', ') };
+    }
     case 'antonym-write':
       return { num, prompt: w.word, answer: w.antonyms.join(', ') };
     case 'meaning-choice': {
@@ -772,7 +790,7 @@ function renderWorksheet(title, sections, columns) {
       <li>
         <span class="ws-q">${escapeHtml(q.prompt)}</span>
         ${q.options
-          ? `<div class="ws-options">${q.options.map((o, i) => `<span>${CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
+          ? `<div class="ws-options">${q.options.map((o, i) => `<span>${q.multi ? '□' : CHOICE_LABELS[i]} ${escapeHtml(o)}</span>`).join('')}</div>`
           : (q.hintLetters
             ? `<div class="ws-slots">${q.hintLetters.map(l => `<span class="ws-slot"><span class="ws-slot-eq">=</span><span class="ws-slot-letter">${escapeHtml(l)}</span><span class="ws-slot-line"></span></span>`).join('')}</div>`
             : `<div class="ws-blank"></div>`)}
