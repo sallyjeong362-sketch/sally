@@ -98,6 +98,49 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .ws-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
 .check-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
 .warn-box { background: #fff8e8; border: 1px solid #f0dca0; color: #7a5c00; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 13px; margin-bottom: 0.75rem; }
+.info-box { background: #f0f5fa; border: 1px solid #cfe0f0; color: #1c4a78; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 13px; margin-bottom: 0.75rem; line-height: 1.6; }
+.err-box { background: #fdf0f0; border: 1px solid #eecccc; color: #a33; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 13px; margin-bottom: 0.75rem; white-space: pre-wrap; }
+
+.ws-code { font-size: 12px; color: #888; margin-top: 0.4rem; letter-spacing: 0.06em; }
+
+.drop-zone { border: 2px dashed #cfcfca; border-radius: 12px; background: #fafaf8; padding: 1.6rem 1rem; text-align: center; cursor: pointer; color: #888; font-size: 13.5px; }
+.drop-zone:hover, .drop-zone.over { border-color: #185FA5; background: #f0f5fa; color: #185FA5; }
+.shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-top: 0.85rem; }
+.shot { position: relative; border: 1px solid #e8e8e6; border-radius: 8px; overflow: hidden; background: #fff; }
+.shot img { width: 100%; height: 96px; object-fit: cover; display: block; }
+.shot-label { font-size: 11px; color: #777; padding: 4px 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shot-del { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 1; cursor: pointer; }
+.shot.busy { opacity: 0.55; }
+.shot-state { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 11px; color: #fff; background: rgba(24,95,165,0.85); padding: 2px 0; }
+.shot-state.err { background: rgba(180,50,50,0.9); }
+
+.progress-line { font-size: 13px; color: #555; margin-top: 0.75rem; }
+
+.sheet-card { border: 1px solid #e8e8e6; border-radius: 12px; margin-bottom: 1rem; overflow: hidden; }
+.sheet-head { display: flex; align-items: center; gap: 10px; padding: 0.7rem 0.9rem; background: #fafaf8; flex-wrap: wrap; }
+.sheet-head input[type=text] { width: auto; flex: 1; min-width: 120px; padding: 0.35rem 0.5rem; font-size: 13.5px; }
+.sheet-score { font-size: 14px; font-weight: 600; color: #185FA5; white-space: nowrap; }
+.sheet-flag { font-size: 12px; color: #a86400; background: #fff8e8; border: 1px solid #f0dca0; border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+.grade-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.grade-table th { text-align: left; font-size: 11px; color: #999; padding: 5px 8px; border-bottom: 1px solid #e8e8e6; font-weight: 600; }
+.grade-table td { padding: 6px 8px; border-bottom: 1px solid #f2f2f0; vertical-align: top; }
+.grade-table tr.needs-review { background: #fffdf4; }
+.grade-table tr.needs-review td:first-child { box-shadow: inset 3px 0 0 #e5b74b; }
+.grade-table .num-col { width: 30px; color: #888; }
+.g-written { font-weight: 600; }
+.g-written.blank { color: #bbb; font-weight: 400; }
+.mark-row { display: flex; gap: 4px; }
+.mark-btn { border: 1px solid #dcdcd8; background: #fff; border-radius: 6px; width: 30px; height: 26px; font-size: 13px; cursor: pointer; color: #888; padding: 0; }
+.mark-btn:hover { background: #f0f0ee; }
+.mark-btn.on[data-v=correct] { background: #e8f5ea; border-color: #8ec79b; color: #217a38; }
+.mark-btn.on[data-v=partial] { background: #fff6e0; border-color: #e5c47b; color: #8a6100; }
+.mark-btn.on[data-v=incorrect] { background: #fdf0f0; border-color: #e2a5a5; color: #b33; }
+.g-note { font-size: 11.5px; color: #999; margin-top: 2px; }
+
+.result-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.result-table th { text-align: left; font-size: 11px; color: #999; padding: 6px 8px; border-bottom: 1px solid #e8e8e6; }
+.result-table td { padding: 7px 8px; border-bottom: 1px solid #f2f2f0; }
+.rate-bar { display: inline-block; height: 7px; background: #f0dcdc; border-radius: 4px; vertical-align: middle; margin-right: 6px; min-width: 2px; }
 
 @media print {
   body * { visibility: hidden; }
@@ -122,6 +165,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
     <button class="tab-btn active" data-tab="list">📖 단어장 <span class="count-badge" id="wordCountBadge">0</span></button>
     <button class="tab-btn" data-tab="add">➕ 데이터 추가</button>
     <button class="tab-btn" data-tab="test">🖨️ 시험지 만들기</button>
+    <button class="tab-btn" data-tab="grade">📸 채점하기</button>
   </nav>
 
   <!-- 단어장 -->
@@ -232,6 +276,70 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
     </div>
 
     <div id="worksheetWrap"></div>
+  </section>
+
+  <!-- 채점하기 -->
+  <section id="tab-grade" class="tab-panel">
+    <div class="card">
+      <h2>1. 채점할 시험지 고르기</h2>
+      <p class="hint">
+        「시험지 만들기」에서 시험지를 만들면 정답과 함께 자동으로 저장돼요. 인쇄물 아래쪽의 <code>시험지 코드</code>와 같은 것을 고르세요.
+      </p>
+      <div class="field">
+        <select id="gradeExamSelect"></select>
+      </div>
+      <div id="gradeExamInfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>2. Claude API 키</h2>
+      <p class="hint">
+        손글씨 인식에 Anthropic Claude를 사용해요. 키는 <strong>이 브라우저에만</strong> 저장되고 서버로 보내지 않습니다 (Anthropic API 제외).
+        키 발급: <code>console.anthropic.com</code> → API Keys
+      </p>
+      <div class="row2">
+        <div class="field">
+          <label>API 키 (sk-ant-...)</label>
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+        </div>
+        <div class="field">
+          <label>인식 정밀도</label>
+          <select id="effortSelect">
+            <option value="medium">보통 (빠르고 저렴)</option>
+            <option value="high" selected>높음 (권장)</option>
+            <option value="xhigh">최고 (글씨가 아주 흐릴 때)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="saveKeyBtn">🔑 키 저장</button>
+        <button class="btn danger small" id="clearKeyBtn">키 삭제</button>
+      </div>
+      <div id="keyStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. 답안지 촬영 / 업로드</h2>
+      <p class="hint">
+        학생 답안지를 한 장씩 찍거나, 스캔한 이미지를 한꺼번에 올리세요. <strong>이미지 1장 = 학생 1명</strong>으로 처리합니다.
+        밝은 곳에서 답안지가 화면에 꽉 차도록 찍으면 인식률이 크게 올라가요.
+      </p>
+      <div class="drop-zone" id="dropZone">
+        📷 여기를 눌러 사진 찍기 / 파일 고르기<br>
+        <span class="muted">(이미지를 이 영역에 끌어다 놓아도 됩니다)</span>
+      </div>
+      <input type="file" id="shotInput" accept="image/*" multiple style="display:none">
+      <div class="shot-grid" id="shotGrid"></div>
+      <div class="btn-row">
+        <button class="btn primary" id="runGradeBtn">🚀 일괄 채점 시작</button>
+        <button class="btn" id="clearShotsBtn">사진 전체 비우기</button>
+      </div>
+      <div class="progress-line" id="gradeProgress"></div>
+      <div id="gradeError"></div>
+    </div>
+
+    <div id="reviewWrap"></div>
+    <div id="summaryWrap"></div>
   </section>
 </div>
 
@@ -847,15 +955,17 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     .map(t => ({
       type: t,
       instruction: TYPE_INSTRUCTIONS[t],
-      questions: assigned.filter(a => a.t === t).map(a => buildQuestion(a.w, t, ++num))
+      questions: assigned.filter(a => a.t === t)
+        .map(a => Object.assign(buildQuestion(a.w, t, ++num), { type: t, wordId: a.w.id }))
     }))
     .filter(s => s.questions.length > 0);
 
   const columns = document.getElementById('quizColumns').value;
-  renderWorksheet(title, sections, columns);
+  const exam = saveExam(title, sections);
+  renderWorksheet(title, sections, columns, exam.code);
 });
 
-function renderWorksheet(title, sections, columns) {
+function renderWorksheet(title, sections, columns, examCode) {
   const wrap = document.getElementById('worksheetWrap');
   const totalCount = sections.reduce((sum, s) => sum + s.questions.length, 0);
   const colStyle = `column-count:${columns}; column-gap:2rem;`;
@@ -889,6 +999,7 @@ function renderWorksheet(title, sections, columns) {
       <div class="ws-header">
         <h2>${escapeHtml(title)}</h2>
         <div class="ws-meta"><span>이름: ______________</span><span>날짜: ______________</span><span>점수: ______ / ${totalCount}</span></div>
+        <div class="ws-code">시험지 코드 ${escapeHtml(examCode || '')}</div>
       </div>
       <div class="ws-sections">${sectionsHtml}</div>
       <div class="answer-key">
@@ -906,6 +1017,699 @@ function renderWorksheet(title, sections, columns) {
   });
 }
 
+/* ---------------- 시험지 저장 ---------------- */
+const EXAM_KEY = 'vocabExams';
+const MAX_EXAMS = 30;
+
+function loadExams() {
+  try {
+    const raw = localStorage.getItem(EXAM_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveExams(list) {
+  try { localStorage.setItem(EXAM_KEY, JSON.stringify(list)); }
+  catch (e) { console.warn('시험지 저장 실패', e); }
+}
+function makeExamCode() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getFullYear() % 100)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+function saveExam(title, sections) {
+  const questions = sections.flatMap(s => s.questions.map(q => ({
+    num: q.num,
+    type: q.type,
+    prompt: q.prompt,
+    answer: q.answer,
+    options: q.options || null,
+    multi: !!q.multi,
+    wordId: q.wordId
+  })));
+  const exams = loadExams();
+  // 같은 분에 여러 번 만들면 코드가 겹치므로 접미사를 붙인다
+  let code = makeExamCode();
+  if (exams.some(e => e.code === code)) {
+    let n = 2;
+    while (exams.some(e => e.code === `${code}-${n}`)) n++;
+    code = `${code}-${n}`;
+  }
+  const exam = { id: genId(), code, title, createdAt: Date.now(), questions };
+  exams.unshift(exam);
+  saveExams(exams.slice(0, MAX_EXAMS));
+  refreshExamSelect(exam.id);
+  return exam;
+}
+
+/* ---------------- 채점: 상태 ---------------- */
+const API_KEY_STORAGE = 'anthropicApiKey';
+const GRADE_MODEL = 'claude-opus-5';
+let shots = [];          // {id, name, dataUrl, state, error}
+let gradedSheets = [];   // {id, name, studentName, items:[...]}
+
+/* ---------------- 채점: 시험지 선택 ---------------- */
+function refreshExamSelect(preferId) {
+  const sel = document.getElementById('gradeExamSelect');
+  if (!sel) return;
+  const exams = loadExams();
+  const keep = preferId || sel.value;
+  if (exams.length === 0) {
+    sel.innerHTML = '<option value="">— 저장된 시험지가 없습니다 —</option>';
+  } else {
+    sel.innerHTML = exams.map(e => {
+      const d = new Date(e.createdAt);
+      const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      return `<option value="${escapeAttr(e.id)}">[${escapeHtml(e.code)}] ${escapeHtml(e.title)} · ${e.questions.length}문항 · ${when}</option>`;
+    }).join('');
+    if (keep && exams.some(e => e.id === keep)) sel.value = keep;
+  }
+  renderExamInfo();
+}
+
+function currentExam() {
+  const sel = document.getElementById('gradeExamSelect');
+  return loadExams().find(e => e.id === sel.value) || null;
+}
+
+function renderExamInfo() {
+  const box = document.getElementById('gradeExamInfo');
+  const exam = currentExam();
+  if (!exam) {
+    box.innerHTML = '<div class="warn-box">먼저 「시험지 만들기」 탭에서 시험지를 한 번 만들어주세요. 그때 정답이 함께 저장됩니다.</div>';
+    return;
+  }
+  box.innerHTML = `<div class="info-box"><strong>${escapeHtml(exam.title)}</strong> — 총 ${exam.questions.length}문항 · 시험지 코드 <strong>${escapeHtml(exam.code)}</strong></div>`;
+}
+
+/* ---------------- 채점: API 키 ---------------- */
+function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ''; }
+function renderKeyStatus(msg, kind) {
+  const el = document.getElementById('keyStatus');
+  if (msg) { el.innerHTML = `<div class="${kind || 'info-box'}">${escapeHtml(msg)}</div>`; return; }
+  el.innerHTML = getApiKey()
+    ? '<div class="info-box">✅ 저장된 키가 있습니다.</div>'
+    : '<div class="warn-box">아직 키가 없습니다. 채점을 하려면 키가 필요해요.</div>';
+}
+
+/* ---------------- 채점: 이미지 준비 ---------------- */
+const MAX_EDGE = 2000;   // Claude 고해상도 상한(2576px) 안쪽으로 여유 있게
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('파일을 읽지 못했습니다'));
+    fr.readAsDataURL(file);
+  });
+}
+
+function shrinkImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => reject(new Error('이미지를 열지 못했습니다 (HEIC 형식이면 JPG로 변환해주세요)'));
+    img.src = dataUrl;
+  });
+}
+
+async function addShots(fileList) {
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  for (const f of files) {
+    const entry = { id: genId(), name: f.name, dataUrl: '', state: 'loading', error: '' };
+    shots.push(entry);
+    renderShots();
+    try {
+      entry.dataUrl = await shrinkImage(await fileToDataUrl(f));
+      entry.state = 'ready';
+    } catch (err) {
+      entry.state = 'error';
+      entry.error = err.message;
+    }
+    renderShots();
+  }
+}
+
+function renderShots() {
+  const grid = document.getElementById('shotGrid');
+  if (shots.length === 0) { grid.innerHTML = ''; return; }
+  grid.innerHTML = shots.map(s => `
+    <div class="shot ${s.state === 'loading' || s.state === 'running' ? 'busy' : ''}">
+      ${s.dataUrl ? `<img src="${s.dataUrl}" alt="">` : '<div style="height:96px;background:#f0f0ee"></div>'}
+      ${s.state === 'loading' ? '<div class="shot-state">여는 중…</div>' : ''}
+      ${s.state === 'running' ? '<div class="shot-state">인식 중…</div>' : ''}
+      ${s.state === 'done' ? '<div class="shot-state">완료</div>' : ''}
+      ${s.state === 'error' ? `<div class="shot-state err">오류</div>` : ''}
+      <button class="shot-del" data-shot="${escapeAttr(s.id)}" title="빼기">×</button>
+      <div class="shot-label" title="${escapeAttr(s.name)}">${escapeHtml(s.name)}</div>
+    </div>`).join('');
+  grid.querySelectorAll('.shot-del').forEach(b => {
+    b.addEventListener('click', () => {
+      shots = shots.filter(s => s.id !== b.dataset.shot);
+      renderShots();
+    });
+  });
+}
+
+/* ---------------- 채점: Claude 호출 ---------------- */
+const TYPE_LABEL_SHORT = {
+  'meaning-write': '단어→뜻 쓰기',
+  'word-write': '뜻→영단어 쓰기',
+  'synonym-write': '동의어 쓰기',
+  'synonym-choice': '동의어 모두 고르기(객관식)',
+  'antonym-write': '반의어 쓰기',
+  'meaning-choice': '뜻 고르기(객관식)',
+  'word-choice': '단어 고르기(객관식)'
+};
+
+const ANSWER_SCHEMA = {
+  type: 'object',
+  properties: {
+    student_name: { type: 'string', description: '답안지 이름란에 적힌 학생 이름. 없거나 못 읽으면 빈 문자열.' },
+    answers: {
+      type: 'array',
+      description: '시험지의 모든 문항에 대해 하나씩, 문항 번호 순서대로.',
+      items: {
+        type: 'object',
+        properties: {
+          num: { type: 'integer', description: '문항 번호' },
+          written: { type: 'string', description: '학생이 그 칸에 실제로 쓴 글자를 그대로. 빈칸이면 빈 문자열.' },
+          verdict: { type: 'string', enum: ['correct', 'partial', 'incorrect', 'blank'] },
+          confidence: { type: 'number', description: '손글씨를 읽어낸 확신도 0.0~1.0' },
+          note: { type: 'string', description: '애매하거나 부분 정답이면 한국어로 짧게 이유. 명확하면 빈 문자열.' }
+        },
+        required: ['num', 'written', 'verdict', 'confidence', 'note'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['student_name', 'answers'],
+  additionalProperties: false
+};
+
+const GRADE_SYSTEM = `당신은 한국 중·고등학교 영어 단어 시험지를 채점하는 보조 교사입니다.
+사진 한 장은 학생 한 명의 답안지입니다.
+
+작업 순서를 반드시 지키세요.
+1) 먼저 각 문항의 답란에 손으로 쓴 글자를 "보이는 그대로" 옮겨 적습니다(written). 정답을 알고 있더라도 정답 쪽으로 고쳐 읽지 마세요. 학생이 틀리게 썼으면 틀린 그대로 적습니다.
+2) 그 다음에만 정답표와 비교해 판정(verdict)합니다.
+
+판정 기준:
+- correct: 의미가 정답과 같음. 대소문자, 띄어쓰기, 문장부호 차이는 무시합니다. 한글 뜻은 정답에 적힌 여러 뜻 중 하나만 맞아도 정답입니다. 정답과 뜻이 같은 다른 표현도 정답으로 봅니다.
+- partial: 철자가 1~2자 틀렸거나, 여러 개를 써야 하는 문항에서 일부만 맞음.
+- incorrect: 썼지만 틀림.
+- blank: 아무것도 쓰지 않음. 이때 written은 빈 문자열입니다.
+
+confidence는 "판정"이 아니라 "손글씨를 제대로 읽었는지"에 대한 확신도입니다. 글씨가 흐리거나 겹쳐 읽기 어려우면 낮게 주세요.
+시험지에 없는 문항 번호를 지어내지 말고, 모든 문항을 빠짐없이 포함하세요.`;
+
+function buildGradePrompt(exam) {
+  const lines = exam.questions.map(q => {
+    const parts = [`${q.num}. [${TYPE_LABEL_SHORT[q.type] || q.type}] 제시어: ${q.prompt}`];
+    if (q.options && q.options.length) {
+      parts.push(`   보기: ${q.options.map((o, i) => `${CHOICE_LABELS[i]} ${o}`).join('  ')}`);
+    }
+    parts.push(`   정답: ${q.answer}`);
+    return parts.join('\n');
+  }).join('\n');
+
+  return `시험지: ${exam.title} (시험지 코드 ${exam.code}, 총 ${exam.questions.length}문항)
+
+아래는 문항 목록과 정답표입니다.
+
+${lines}
+
+첨부한 사진은 이 시험지에 학생이 손으로 답을 쓴 답안지입니다.
+이름란의 학생 이름을 읽고, ${exam.questions.length}개 문항 전부에 대해 written / verdict / confidence / note를 채워 주세요.`;
+}
+
+async function callClaude(exam, dataUrl, effort) {
+  const b64 = dataUrl.split(',')[1];
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': getApiKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: GRADE_MODEL,
+      max_tokens: 16000,
+      system: GRADE_SYSTEM,
+      thinking: { type: 'adaptive' },
+      output_config: {
+        effort: effort,
+        format: { type: 'json_schema', schema: ANSWER_SCHEMA }
+      },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: buildGradePrompt(exam) }
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (j && j.error && j.error.message) detail = j.error.message;
+    } catch (e) { /* 본문이 JSON이 아니면 상태코드만 */ }
+    if (res.status === 401) throw new Error('API 키가 올바르지 않습니다. 키를 다시 확인해주세요.');
+    if (res.status === 429) throw new Error('요청이 너무 잦습니다(429). 잠시 후 다시 시도해주세요.');
+    throw new Error(detail);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') throw new Error('모델이 이 이미지의 처리를 거부했습니다.');
+  if (data.stop_reason === 'max_tokens') throw new Error('응답이 잘렸습니다. 문항 수를 줄이거나 정밀도를 낮춰 다시 시도해주세요.');
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if (!textBlock) throw new Error('모델이 빈 응답을 반환했습니다.');
+  return JSON.parse(textBlock.text);
+}
+
+/* ---------------- 채점: 로컬 대조 채점 ---------------- */
+function normAns(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFC')
+    .replace(/[\s.,·・/\\'"“”‘’()\[\]~\-–—!?;:]/g, '');
+}
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function spellTolerance(len) { return len >= 8 ? 2 : (len >= 4 ? 1 : 0); }
+
+// 객관식 답안에서 학생이 고른 번호(1-based)를 뽑아낸다
+function pickedIndexes(written) {
+  const found = new Set();
+  String(written || '').split('').forEach(ch => {
+    const circled = CHOICE_LABELS.indexOf(ch);
+    if (circled >= 0) found.add(circled + 1);
+    else if (/[1-8]/.test(ch)) found.add(Number(ch));
+  });
+  return Array.from(found).sort((a, b) => a - b);
+}
+
+function localGrade(q, written) {
+  const w = normAns(written);
+  if (!w) return 'blank';
+
+  // 객관식: 고른 번호 집합을 비교
+  if (q.options && q.options.length) {
+    // 복수정답 문항의 answer는 "① ③ (desert, forsake)" 꼴이라 앞머리 기호에서 바로 읽어낸다
+    let correctSet = Array.from(String(q.answer || ''))
+      .map(ch => CHOICE_LABELS.indexOf(ch))
+      .filter(i => i >= 0)
+      .map(i => i + 1);
+    if (correctSet.length === 0) {
+      correctSet = q.options
+        .map((o, i) => normAns(o) === normAns(q.answer) ? i + 1 : 0)
+        .filter(Boolean);
+    }
+    if (correctSet.length === 0) return 'incorrect';
+
+    // 번호 대신 보기 내용을 적은 학생도 인정한다
+    let picked = pickedIndexes(written);
+    if (picked.length === 0) {
+      picked = q.options
+        .map((o, i) => { const n = normAns(o); return n && w.includes(n) ? i + 1 : 0; })
+        .filter(Boolean);
+    }
+    if (picked.length === 0) return 'incorrect';
+    const same = picked.length === correctSet.length && picked.every(p => correctSet.includes(p));
+    if (same) return 'correct';
+    const anyRight = picked.some(p => correctSet.includes(p));
+    const noWrong = picked.every(p => correctSet.includes(p));
+    return (anyRight && noWrong) ? 'partial' : 'incorrect';
+  }
+
+  const targets = String(q.answer || '').split(/[,/]/).map(normAns).filter(Boolean);
+  if (targets.length === 0) return 'incorrect';
+
+  // 한 칸에 "desert, forsake" 처럼 여러 개를 쓴 답안도 있으므로
+  // 통째로 본 것과 토막낸 것을 모두 후보로 둔다 ("give up" 같은 두 단어 정답 보호)
+  const candidates = Array.from(new Set(
+    [w].concat(String(written).split(/[\s,/]+/).map(normAns))
+  )).filter(Boolean);
+
+  const RANK = { no: 0, near: 1, exact: 2 };
+  const levels = targets.map(t =>
+    candidates.reduce((best, c) => RANK[matchLevel(c, t)] > RANK[best] ? matchLevel(c, t) : best, 'no')
+  );
+  const matched = levels.filter(l => l !== 'no');
+
+  // 동의어/반의어 쓰기: 정답을 모두 써야 만점
+  if (q.type === 'synonym-write' || q.type === 'antonym-write') {
+    if (matched.length === targets.length && levels.every(l => l === 'exact')) return 'correct';
+    return matched.length > 0 ? 'partial' : 'incorrect';
+  }
+  if (levels.includes('exact')) return 'correct';
+  return matched.length > 0 ? 'partial' : 'incorrect';
+}
+
+// 한글 뜻은 "버리다" 처럼 일부만 써도 인정해야 하지만,
+// 영단어는 부분일치를 허용하면 abandone 같은 오타가 정답이 되므로 철자 거리로만 본다.
+function matchLevel(w, t) {
+  if (!t) return 'no';
+  if (w === t) return 'exact';
+  const bothLatin = /^[a-z]+$/.test(w) && /^[a-z]+$/.test(t);
+  if (!bothLatin && (w.includes(t) || t.includes(w))) return 'exact';
+  if (levenshtein(w, t) <= spellTolerance(Math.max(w.length, t.length))) return 'near';
+  return 'no';
+}
+
+const VERDICT_SCORE = { correct: 1, partial: 0.5, incorrect: 0, blank: 0 };
+
+/* ---------------- 채점: 실행 ---------------- */
+async function runGrading() {
+  const exam = currentExam();
+  const errBox = document.getElementById('gradeError');
+  const progress = document.getElementById('gradeProgress');
+  errBox.innerHTML = '';
+
+  if (!exam) { errBox.innerHTML = '<div class="err-box">채점할 시험지를 먼저 선택해주세요.</div>'; return; }
+  if (!getApiKey()) { errBox.innerHTML = '<div class="err-box">API 키를 먼저 저장해주세요.</div>'; return; }
+  // 열지 못한 사진(dataUrl 없음)은 보낼 게 없으므로 제외한다
+  const ready = shots.filter(s => s.dataUrl && s.state !== 'loading');
+  if (ready.length === 0) { errBox.innerHTML = '<div class="err-box">채점할 답안지 사진을 올려주세요. (사진을 열지 못했다면 JPG/PNG로 변환해 다시 올려주세요)</div>'; return; }
+
+  const btn = document.getElementById('runGradeBtn');
+  btn.disabled = true;
+  gradedSheets = [];
+  const effort = document.getElementById('effortSelect').value;
+  const failures = [];
+
+  for (let i = 0; i < ready.length; i++) {
+    const shot = ready[i];
+    shot.state = 'running';
+    renderShots();
+    progress.textContent = `채점 중… ${i + 1} / ${ready.length} (${shot.name})`;
+    try {
+      const parsed = await callClaude(exam, shot.dataUrl, effort);
+      gradedSheets.push(buildSheet(exam, shot, parsed));
+      shot.state = 'done';
+    } catch (err) {
+      shot.state = 'error';
+      shot.error = err.message;
+      failures.push(`${shot.name}: ${err.message}`);
+    }
+    renderShots();
+    renderReview();
+    renderSummary();
+  }
+
+  progress.textContent = `채점 완료 — 성공 ${gradedSheets.length}장 / 실패 ${failures.length}장`;
+  if (failures.length) errBox.innerHTML = `<div class="err-box">${escapeHtml(failures.join('\n'))}</div>`;
+  btn.disabled = false;
+}
+
+function buildSheet(exam, shot, parsed) {
+  const byNum = new Map((parsed.answers || []).map(a => [a.num, a]));
+  const items = exam.questions.map(q => {
+    const a = byNum.get(q.num) || { written: '', verdict: 'blank', confidence: 0, note: '응답 없음' };
+    const written = String(a.written || '');
+    const modelVerdict = ['correct', 'partial', 'incorrect', 'blank'].includes(a.verdict) ? a.verdict : 'incorrect';
+    const local = localGrade(q, written);
+    const conf = typeof a.confidence === 'number' ? a.confidence : 0;
+    const disagree = local !== modelVerdict;
+    return {
+      num: q.num,
+      type: q.type,
+      prompt: q.prompt,
+      answer: q.answer,
+      wordId: q.wordId,
+      written,
+      verdict: modelVerdict,
+      localVerdict: local,
+      confidence: conf,
+      note: String(a.note || ''),
+      flagged: disagree || conf < 0.8
+    };
+  });
+  return {
+    id: shot.id,
+    fileName: shot.name,
+    studentName: String(parsed.student_name || '').trim() || '(이름 미상)',
+    items
+  };
+}
+
+function sheetScore(sheet) {
+  return sheet.items.reduce((sum, it) => sum + (VERDICT_SCORE[it.verdict] || 0), 0);
+}
+
+/* ---------------- 채점: 검수 화면 ---------------- */
+const VERDICT_MARKS = [
+  ['correct', '○'],
+  ['partial', '△'],
+  ['incorrect', '✗']
+];
+
+function renderReview() {
+  const wrap = document.getElementById('reviewWrap');
+  if (gradedSheets.length === 0) { wrap.innerHTML = ''; return; }
+
+  const cards = gradedSheets.map(sheet => {
+    const total = sheet.items.length;
+    const flagCount = sheet.items.filter(i => i.flagged).length;
+    const rows = sheet.items.map(it => {
+      const marks = VERDICT_MARKS.map(([v, sym]) =>
+        `<button class="mark-btn ${it.verdict === v ? 'on' : ''}" data-v="${v}" data-sheet="${escapeAttr(sheet.id)}" data-num="${it.num}">${sym}</button>`
+      ).join('');
+      const noteBits = [];
+      if (it.note) noteBits.push(it.note);
+      if (it.localVerdict !== it.verdict) {
+        const m = VERDICT_MARKS.find(v => v[0] === it.localVerdict);
+        noteBits.push(`자동대조는 ${m ? m[1] : '빈칸'} 판정`);
+      }
+      if (it.confidence < 0.8) noteBits.push(`인식 확신도 ${Math.round(it.confidence * 100)}%`);
+      return `
+        <tr class="${it.flagged ? 'needs-review' : ''}">
+          <td class="num-col">${it.num}</td>
+          <td>${escapeHtml(it.prompt)}</td>
+          <td><span class="g-written ${it.written ? '' : 'blank'}">${escapeHtml(it.written || '(빈칸)')}</span>
+            ${noteBits.length ? `<div class="g-note">${escapeHtml(noteBits.join(' · '))}</div>` : ''}</td>
+          <td class="muted">${escapeHtml(it.answer)}</td>
+          <td><div class="mark-row">${marks}</div></td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="sheet-card">
+        <div class="sheet-head">
+          <span class="muted">${escapeHtml(sheet.fileName)}</span>
+          <input type="text" value="${escapeAttr(sheet.studentName)}" data-name="${escapeAttr(sheet.id)}" placeholder="학생 이름">
+          <span class="sheet-score" id="score-${escapeAttr(sheet.id)}">${sheetScore(sheet)} / ${total}</span>
+          ${flagCount ? `<span class="sheet-flag">확인 필요 ${flagCount}</span>` : ''}
+        </div>
+        <table class="grade-table">
+          <thead><tr><th>#</th><th>문제</th><th>학생 답안</th><th>정답</th><th>판정</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="card"><h2>4. 검수</h2>
+    <p class="hint">노란색으로 표시된 줄은 <strong>사람이 한 번 봐야 하는 문항</strong>이에요 (글씨가 흐리거나, 자동 대조 결과와 판정이 엇갈린 경우). ○ △ ✗ 를 눌러 바로 고칠 수 있습니다.</p>
+    ${cards}</div>`;
+
+  wrap.querySelectorAll('.mark-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const sheet = gradedSheets.find(s => s.id === b.dataset.sheet);
+      if (!sheet) return;
+      const item = sheet.items.find(i => i.num === Number(b.dataset.num));
+      if (!item) return;
+      item.verdict = b.dataset.v;
+      item.flagged = false;
+      renderReview();
+      renderSummary();
+    });
+  });
+  wrap.querySelectorAll('input[data-name]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const sheet = gradedSheets.find(s => s.id === inp.dataset.name);
+      if (sheet) { sheet.studentName = inp.value; renderSummary(); }
+    });
+  });
+}
+
+/* ---------------- 채점: 결과 요약 ---------------- */
+function renderSummary() {
+  const wrap = document.getElementById('summaryWrap');
+  if (gradedSheets.length === 0) { wrap.innerHTML = ''; return; }
+  const exam = currentExam();
+  const total = gradedSheets[0].items.length;
+
+  const studentRows = gradedSheets
+    .map(s => ({ s, score: sheetScore(s) }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ s, score }) => `
+      <tr>
+        <td>${escapeHtml(s.studentName)}</td>
+        <td>${score} / ${total}</td>
+        <td>${total ? Math.round(score / total * 100) : 0}%</td>
+      </tr>`).join('');
+
+  const n = gradedSheets.length;
+  const stats = gradedSheets[0].items.map((_, idx) => {
+    const wrong = gradedSheets.filter(s => {
+      const v = s.items[idx].verdict;
+      return v !== 'correct';
+    }).length;
+    return { item: gradedSheets[0].items[idx], wrong, rate: wrong / n };
+  }).filter(x => x.wrong > 0).sort((a, b) => b.wrong - a.wrong);
+
+  const statRows = stats.map(x => `
+    <tr>
+      <td>${x.item.num}</td>
+      <td>${escapeHtml(x.item.prompt)}</td>
+      <td class="muted">${escapeHtml(x.item.answer)}</td>
+      <td><span class="rate-bar" style="width:${Math.round(x.rate * 80)}px"></span>${x.wrong} / ${n} (${Math.round(x.rate * 100)}%)</td>
+    </tr>`).join('');
+
+  const avg = gradedSheets.reduce((sum, s) => sum + sheetScore(s), 0) / n;
+
+  wrap.innerHTML = `
+    <div class="card">
+      <h2>5. 결과</h2>
+      <div class="info-box">채점한 답안지 <strong>${n}장</strong> · 평균 <strong>${avg.toFixed(1)} / ${total}</strong> (${total ? Math.round(avg / total * 100) : 0}%)</div>
+      <h3>학생별 점수</h3>
+      <table class="result-table">
+        <thead><tr><th>이름</th><th>점수</th><th>정답률</th></tr></thead>
+        <tbody>${studentRows}</tbody>
+      </table>
+      ${stats.length ? `
+        <h3>많이 틀린 문항</h3>
+        <table class="result-table">
+          <thead><tr><th>#</th><th>문제</th><th>정답</th><th>틀린 학생</th></tr></thead>
+          <tbody>${statRows}</tbody>
+        </table>` : '<p class="hint" style="margin-top:1rem">모든 문항을 전원이 맞혔어요. 👏</p>'}
+      <div class="btn-row">
+        <button class="btn" id="exportCsvBtn">⬇️ 점수 CSV 내보내기</button>
+        ${stats.length ? '<button class="btn primary" id="retestBtn">📝 틀린 단어로 재시험지 만들기</button>' : ''}
+      </div>
+    </div>`;
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => exportScoresCsv(exam, total));
+  const retestBtn = document.getElementById('retestBtn');
+  if (retestBtn) retestBtn.addEventListener('click', () => buildRetest(stats));
+}
+
+function exportScoresCsv(exam, total) {
+  const esc = v => `"${String(v).replace(/"/g, '""')}"`;
+  const header = ['이름', '점수', '만점', '정답률(%)', ...gradedSheets[0].items.map(i => `${i.num}번`)];
+  const lines = [header.map(esc).join(',')];
+  gradedSheets.forEach(s => {
+    const score = sheetScore(s);
+    lines.push([
+      s.studentName, score, total, total ? Math.round(score / total * 100) : 0,
+      ...s.items.map(i => i.written || '')
+    ].map(esc).join(','));
+  });
+  // 엑셀이 한글을 깨뜨리지 않도록 BOM을 붙인다
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(exam && exam.code) || 'scores'}-scores.csv`;
+  // 파이어폭스는 앵커가 문서 안에 있어야 다운로드가 시작된다
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // 즉시 해제하면 다운로드가 시작되기 전에 URL이 사라질 수 있다
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function buildRetest(stats) {
+  const wrongWordIds = Array.from(new Set(stats.map(x => x.item.wordId).filter(Boolean)));
+  const pool = wrongWordIds.map(id => words.find(w => w.id === id)).filter(Boolean);
+  if (pool.length === 0) {
+    alert('틀린 문항에 해당하는 단어를 단어장에서 찾지 못했어요. (단어가 삭제되었을 수 있습니다)');
+    return;
+  }
+  // 원래 시험지에서 그 단어에 쓰였던 유형을 그대로 이어서 낸다
+  const typeOf = new Map(stats.map(x => [x.item.wordId, x.item.type]));
+  let num = 0;
+  const sections = TYPE_ORDER
+    .map(t => {
+      const its = pool.filter(w => (typeOf.get(w.id) || 'meaning-write') === t && typeApplies(w, t));
+      return {
+        type: t,
+        instruction: TYPE_INSTRUCTIONS[t],
+        questions: its.map(w => Object.assign(buildQuestion(w, t, ++num), { type: t, wordId: w.id }))
+      };
+    })
+    .filter(s => s.questions.length > 0);
+
+  const title = '오답 재시험지';
+  const exam = saveExam(title, sections);
+  renderWorksheet(title, sections, document.getElementById('quizColumns').value, exam.code);
+  document.querySelector('.tab-btn[data-tab="test"]').click();
+  document.getElementById('worksheetWrap').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ---------------- 채점: 이벤트 연결 ---------------- */
+document.getElementById('gradeExamSelect').addEventListener('change', renderExamInfo);
+
+document.getElementById('saveKeyBtn').addEventListener('click', () => {
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if (!v) { renderKeyStatus('키를 입력해주세요.', 'warn-box'); return; }
+  localStorage.setItem(API_KEY_STORAGE, v);
+  document.getElementById('apiKeyInput').value = '';
+  renderKeyStatus('저장했습니다. 이제 채점할 수 있어요.', 'info-box');
+});
+document.getElementById('clearKeyBtn').addEventListener('click', () => {
+  localStorage.removeItem(API_KEY_STORAGE);
+  renderKeyStatus();
+});
+
+const dropZone = document.getElementById('dropZone');
+const shotInput = document.getElementById('shotInput');
+dropZone.addEventListener('click', () => shotInput.click());
+shotInput.addEventListener('change', e => { addShots(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault(); dropZone.classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+}));
+dropZone.addEventListener('drop', e => { if (e.dataTransfer) addShots(e.dataTransfer.files); });
+
+document.getElementById('clearShotsBtn').addEventListener('click', () => {
+  shots = [];
+  gradedSheets = [];
+  renderShots(); renderReview(); renderSummary();
+  document.getElementById('gradeProgress').textContent = '';
+  document.getElementById('gradeError').innerHTML = '';
+});
+document.getElementById('runGradeBtn').addEventListener('click', runGrading);
+
 /* ---------------- utils ---------------- */
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -917,6 +1721,8 @@ renderWordList();
 refreshGroupOptions();
 renderGroupFilter();
 checkIncomingShareLink();
+refreshExamSelect();
+renderKeyStatus();
 </script>
 </body>
 </html>
