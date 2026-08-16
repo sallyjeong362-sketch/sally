@@ -153,6 +153,63 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .row2, .row3 { grid-template-columns: 1fr; }
   .word-table { display: block; overflow-x: auto; }
 }
+
+/* ---------- 모바일 ---------- */
+.capture-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.touch { min-height: 44px; }
+.btn.grow { flex: 1; }
+
+@media (max-width: 640px) {
+  body { padding: 0.75rem 0.6rem 3rem; }
+  h1 { font-size: 19px; }
+  .subtitle { font-size: 13px; margin-bottom: 1rem; }
+  .card { padding: 1rem 0.9rem; border-radius: 12px; margin-bottom: 0.9rem; }
+
+  /* 탭이 넘치면 가로로 밀어서 보게 한다 */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; padding: 0.6rem 0.6rem; font-size: 13px; flex: 0 0 auto; }
+
+  /* iOS는 글자 16px 미만인 입력칸을 누르면 화면을 확대해버린다 */
+  input[type=text], input[type=number], input[type=password], textarea, select { font-size: 16px; }
+
+  .btn { min-height: 42px; padding: 0.6rem 0.9rem; }
+  .btn.small { min-height: 36px; }
+  .btn-row { gap: 6px; }
+  .capture-row .btn { flex: 1; min-width: 0; }
+  .drop-zone { display: none; }          /* 폰에서는 드래그앤드롭이 의미 없다 */
+  .type-checks { grid-template-columns: 1fr; }
+  .shot-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .shot img { height: 84px; }
+
+  /* 검수표: 5열 표를 문항별 카드로 바꾼다 */
+  .grade-table, .grade-table tbody, .grade-table tr, .grade-table td { display: block; }
+  .grade-table thead { display: none; }
+  .grade-table tr {
+    display: grid; grid-template-columns: 1fr auto;
+    grid-template-areas: "q m" "a m" "k m";
+    gap: 2px 10px; align-items: start;
+    padding: 11px 12px; border-bottom: 1px solid #f0f0ee;
+  }
+  .grade-table td { border: none; padding: 0; }
+  .grade-table td.num-col { display: none; }
+  .grade-table td.q-col { grid-area: q; font-weight: 600; font-size: 14px; }
+  .grade-table td.q-col::before { content: attr(data-num) ". "; color: #185FA5; font-weight: 600; }
+  .grade-table td.a-col { grid-area: a; }
+  .grade-table td.a-col::before { content: "답안 "; color: #bbb; font-size: 11px; }
+  .grade-table td.k-col { grid-area: k; font-size: 12.5px; }
+  .grade-table td.k-col::before { content: "정답 "; color: #bbb; font-size: 11px; }
+  .grade-table td.m-col { grid-area: m; align-self: center; }
+  .mark-btn { width: 46px; height: 40px; font-size: 15px; }
+  .grade-table tr.needs-review td:first-child { box-shadow: none; }
+  .grade-table tr.needs-review { box-shadow: inset 3px 0 0 #e5b74b; }
+
+  .sheet-head { gap: 6px; }
+  .sheet-head input[type=text] { flex: 1 1 100%; order: 3; }
+
+  /* 결과표는 좁으면 가로 스크롤 */
+  .result-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
 </style>
 </head>
 <body>
@@ -297,10 +354,26 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
         손글씨 인식에 Anthropic Claude를 사용해요. 키는 <strong>이 브라우저에만</strong> 저장되고 서버로 보내지 않습니다 (Anthropic API 제외).
         키 발급: <code>console.anthropic.com</code> → API Keys
       </p>
+      <div class="field">
+        <label>API 키 (sk-ant-...)</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      </div>
+      <div class="btn-row">
+        <button class="btn touch" id="saveKeyBtn">🔑 키 저장</button>
+        <button class="btn danger touch" id="clearKeyBtn">키 삭제</button>
+      </div>
+      <div id="keyStatus"></div>
+
+      <h3>사용할 모델</h3>
+      <p class="hint">단어 시험은 답이 짧아서 저렴한 모델로도 대개 충분해요. 글씨가 험한 반만 정확한 모델로 바꿔 쓰시면 됩니다.</p>
       <div class="row2">
         <div class="field">
-          <label>API 키 (sk-ant-...)</label>
-          <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+          <label>모델</label>
+          <select id="modelSelect">
+            <option value="haiku">💸 저렴 — Haiku 4.5</option>
+            <option value="sonnet" selected>⚖️ 보통 — Sonnet 5</option>
+            <option value="opus">🎯 정확 — Opus 5</option>
+          </select>
         </div>
         <div class="field">
           <label>인식 정밀도</label>
@@ -311,28 +384,26 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
           </select>
         </div>
       </div>
-      <div class="btn-row">
-        <button class="btn" id="saveKeyBtn">🔑 키 저장</button>
-        <button class="btn danger small" id="clearKeyBtn">키 삭제</button>
-      </div>
-      <div id="keyStatus"></div>
+      <div id="costHint"></div>
     </div>
 
     <div class="card">
       <h2>3. 답안지 촬영 / 업로드</h2>
       <p class="hint">
-        학생 답안지를 한 장씩 찍거나, 스캔한 이미지를 한꺼번에 올리세요. <strong>이미지 1장 = 학생 1명</strong>으로 처리합니다.
-        밝은 곳에서 답안지가 화면에 꽉 차도록 찍으면 인식률이 크게 올라가요.
+        <strong>이미지 1장 = 학생 1명</strong>으로 처리합니다. 답안지를 한 장씩 찍으면 아래에 계속 쌓이니,
+        반 전체를 다 찍은 뒤 한 번에 채점하세요. 밝은 곳에서 답안지가 화면에 꽉 차도록 찍으면 인식률이 크게 올라가요.
       </p>
-      <div class="drop-zone" id="dropZone">
-        📷 여기를 눌러 사진 찍기 / 파일 고르기<br>
-        <span class="muted">(이미지를 이 영역에 끌어다 놓아도 됩니다)</span>
+      <div class="capture-row">
+        <button class="btn primary touch" id="cameraBtn">📷 카메라로 찍기</button>
+        <button class="btn touch" id="albumBtn">🖼️ 앨범에서 고르기</button>
       </div>
+      <div class="drop-zone" id="dropZone">이미지를 이 영역에 끌어다 놓아도 됩니다</div>
+      <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none">
       <input type="file" id="shotInput" accept="image/*" multiple style="display:none">
       <div class="shot-grid" id="shotGrid"></div>
       <div class="btn-row">
-        <button class="btn primary" id="runGradeBtn">🚀 일괄 채점 시작</button>
-        <button class="btn" id="clearShotsBtn">사진 전체 비우기</button>
+        <button class="btn primary touch grow" id="runGradeBtn">🚀 일괄 채점 시작</button>
+        <button class="btn touch" id="clearShotsBtn">사진 비우기</button>
       </div>
       <div class="progress-line" id="gradeProgress"></div>
       <div id="gradeError"></div>
@@ -1064,9 +1135,21 @@ function saveExam(title, sections) {
 
 /* ---------------- 채점: 상태 ---------------- */
 const API_KEY_STORAGE = 'anthropicApiKey';
-const GRADE_MODEL = 'claude-opus-5';
+const MODEL_STORAGE = 'gradeModel';
+
+// Haiku 4.5는 effort/적응형 사고를 지원하지 않으므로 요청 형태가 다르다.
+const GRADE_MODELS = {
+  haiku:  { id: 'claude-haiku-4-5', name: 'Haiku 4.5', effort: false, thinking: false, won: 30 },
+  sonnet: { id: 'claude-sonnet-5',  name: 'Sonnet 5',  effort: true,  thinking: true,  won: 80 },
+  opus:   { id: 'claude-opus-5',    name: 'Opus 5',    effort: true,  thinking: true,  won: 150 }
+};
+
 let shots = [];          // {id, name, dataUrl, state, error}
 let gradedSheets = [];   // {id, name, studentName, items:[...]}
+
+function currentModel() {
+  return GRADE_MODELS[document.getElementById('modelSelect').value] || GRADE_MODELS.sonnet;
+}
 
 /* ---------------- 채점: 시험지 선택 ---------------- */
 function refreshExamSelect(preferId) {
@@ -1163,6 +1246,7 @@ async function addShots(fileList) {
 
 function renderShots() {
   const grid = document.getElementById('shotGrid');
+  renderModelHint();
   if (shots.length === 0) { grid.innerHTML = ''; return; }
   grid.innerHTML = shots.map(s => `
     <div class="shot ${s.state === 'loading' || s.state === 'running' ? 'busy' : ''}">
@@ -1254,8 +1338,25 @@ ${lines}
 이름란의 학생 이름을 읽고, ${exam.questions.length}개 문항 전부에 대해 written / verdict / confidence / note를 채워 주세요.`;
 }
 
-async function callClaude(exam, dataUrl, effort) {
+async function callClaude(exam, dataUrl, model, effort) {
   const b64 = dataUrl.split(',')[1];
+  const body = {
+    model: model.id,
+    max_tokens: 16000,
+    system: GRADE_SYSTEM,
+    output_config: { format: { type: 'json_schema', schema: ANSWER_SCHEMA } },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+        { type: 'text', text: buildGradePrompt(exam) }
+      ]
+    }]
+  };
+  // 적응형 사고와 effort는 최신 모델에만 있다. Haiku에 보내면 400이 난다.
+  if (model.thinking) body.thinking = { type: 'adaptive' };
+  if (model.effort) body.output_config.effort = effort;
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1264,23 +1365,7 @@ async function callClaude(exam, dataUrl, effort) {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     },
-    body: JSON.stringify({
-      model: GRADE_MODEL,
-      max_tokens: 16000,
-      system: GRADE_SYSTEM,
-      thinking: { type: 'adaptive' },
-      output_config: {
-        effort: effort,
-        format: { type: 'json_schema', schema: ANSWER_SCHEMA }
-      },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-          { type: 'text', text: buildGradePrompt(exam) }
-        ]
-      }]
-    })
+    body: JSON.stringify(body)
   });
 
   if (!res.ok) {
@@ -1422,6 +1507,7 @@ async function runGrading() {
   const btn = document.getElementById('runGradeBtn');
   btn.disabled = true;
   gradedSheets = [];
+  const model = currentModel();
   const effort = document.getElementById('effortSelect').value;
   const failures = [];
 
@@ -1429,9 +1515,9 @@ async function runGrading() {
     const shot = ready[i];
     shot.state = 'running';
     renderShots();
-    progress.textContent = `채점 중… ${i + 1} / ${ready.length} (${shot.name})`;
+    progress.textContent = `채점 중… ${i + 1} / ${ready.length} · ${model.name}`;
     try {
-      const parsed = await callClaude(exam, shot.dataUrl, effort);
+      const parsed = await callClaude(exam, shot.dataUrl, model, effort);
       gradedSheets.push(buildSheet(exam, shot, parsed));
       shot.state = 'done';
     } catch (err) {
@@ -1512,11 +1598,11 @@ function renderReview() {
       return `
         <tr class="${it.flagged ? 'needs-review' : ''}">
           <td class="num-col">${it.num}</td>
-          <td>${escapeHtml(it.prompt)}</td>
-          <td><span class="g-written ${it.written ? '' : 'blank'}">${escapeHtml(it.written || '(빈칸)')}</span>
+          <td class="q-col" data-num="${it.num}">${escapeHtml(it.prompt)}</td>
+          <td class="a-col"><span class="g-written ${it.written ? '' : 'blank'}">${escapeHtml(it.written || '(빈칸)')}</span>
             ${noteBits.length ? `<div class="g-note">${escapeHtml(noteBits.join(' · '))}</div>` : ''}</td>
-          <td class="muted">${escapeHtml(it.answer)}</td>
-          <td><div class="mark-row">${marks}</div></td>
+          <td class="k-col muted">${escapeHtml(it.answer)}</td>
+          <td class="m-col"><div class="mark-row">${marks}</div></td>
         </tr>`;
     }).join('');
 
@@ -1677,6 +1763,25 @@ function buildRetest(stats) {
 /* ---------------- 채점: 이벤트 연결 ---------------- */
 document.getElementById('gradeExamSelect').addEventListener('change', renderExamInfo);
 
+function renderModelHint() {
+  const model = currentModel();
+  const effortSel = document.getElementById('effortSelect');
+  // Haiku는 정밀도 조절이 없으므로 선택지를 잠근다
+  effortSel.disabled = !model.effort;
+  const n = shots.filter(s => s.dataUrl).length;
+  const per = model.won;
+  const forNow = n ? ` 지금 올린 ${n}장이면 약 ${(per * n).toLocaleString()}원.` : '';
+  document.getElementById('costHint').innerHTML =
+    `<div class="info-box"><strong>${escapeHtml(model.name)}</strong> · 답안지 1장당 대략 <strong>${per}원</strong>
+     (30명이면 ${(per * 30).toLocaleString()}원쯤).${escapeHtml(forNow)}
+     <span class="muted">문항 수와 글씨에 따라 달라지는 어림값이에요.</span></div>`;
+}
+
+document.getElementById('modelSelect').addEventListener('change', () => {
+  localStorage.setItem(MODEL_STORAGE, document.getElementById('modelSelect').value);
+  renderModelHint();
+});
+
 document.getElementById('saveKeyBtn').addEventListener('click', () => {
   const v = document.getElementById('apiKeyInput').value.trim();
   if (!v) { renderKeyStatus('키를 입력해주세요.', 'warn-box'); return; }
@@ -1691,8 +1796,13 @@ document.getElementById('clearKeyBtn').addEventListener('click', () => {
 
 const dropZone = document.getElementById('dropZone');
 const shotInput = document.getElementById('shotInput');
+const camInput = document.getElementById('camInput');
 dropZone.addEventListener('click', () => shotInput.click());
+document.getElementById('albumBtn').addEventListener('click', () => shotInput.click());
+document.getElementById('cameraBtn').addEventListener('click', () => camInput.click());
+// 같은 파일을 다시 골라도 change가 뜨도록 매번 값을 비운다
 shotInput.addEventListener('change', e => { addShots(e.target.files); e.target.value = ''; });
+camInput.addEventListener('change', e => { addShots(e.target.files); e.target.value = ''; });
 ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
   e.preventDefault(); dropZone.classList.add('over');
 }));
@@ -1723,6 +1833,9 @@ renderGroupFilter();
 checkIncomingShareLink();
 refreshExamSelect();
 renderKeyStatus();
+const savedModel = localStorage.getItem(MODEL_STORAGE);
+if (savedModel && GRADE_MODELS[savedModel]) document.getElementById('modelSelect').value = savedModel;
+renderModelHint();
 </script>
 </body>
 </html>
