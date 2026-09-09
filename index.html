@@ -121,6 +121,7 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   <nav class="tabs">
     <button class="tab-btn active" data-tab="list">📖 단어장 <span class="count-badge" id="wordCountBadge">0</span></button>
     <button class="tab-btn" data-tab="add">➕ 데이터 추가</button>
+    <button class="tab-btn" data-tab="extract">📄 지문에서 단어 뽑기</button>
     <button class="tab-btn" data-tab="test">🖨️ 시험지 만들기</button>
   </nav>
 
@@ -181,6 +182,34 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
         <button class="btn" id="loadSampleBtn">예시 데이터 넣어보기</button>
       </div>
       <div id="parsePreviewWrap"></div>
+    </div>
+  </section>
+
+  <!-- 지문에서 단어 뽑기 -->
+  <section id="tab-extract" class="tab-panel">
+    <div class="card">
+      <h2>지문 붙여넣기</h2>
+      <p class="hint">
+        영어 지문을 붙여넣으면 흔한 기능어(관사, 전치사 등)와 짧은 단어를 걸러내고 중요해 보이는 단어를 자동으로 뽑아드려요.
+        내장된 사전에 있는 단어는 동의어·반의어까지 자동으로 채워지고, 사전에 없는 단어는 직접 입력할 수 있게 빈칸으로 남겨둬요.
+        (완벽한 인공지능 분석은 아니라서, 추출 후 목록을 검토하고 원하는 단어만 선택해 추가해주세요.)
+      </p>
+      <div class="field">
+        <label>그룹 / Day (예: Day1 — 비워두면 미분류로 저장돼요)</label>
+        <input type="text" id="extractGroup" list="groupOptions" placeholder="예: Day1">
+      </div>
+      <div class="field">
+        <textarea id="extractArea" placeholder="여기에 영어 지문을 붙여넣으세요..."></textarea>
+      </div>
+      <div class="row2">
+        <div class="field"><label>최소 글자 수</label><input type="number" id="extractMinLen" min="3" max="12" value="5"></div>
+        <div class="field"><label>최대 추출 개수</label><input type="number" id="extractMaxCount" min="1" max="60" value="20"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="extractBtn">🔍 중요 단어 추출하기</button>
+        <button class="btn" id="loadSamplePassageBtn">예시 지문 넣어보기</button>
+      </div>
+      <div id="extractPreviewWrap"></div>
     </div>
   </section>
 
@@ -728,6 +757,408 @@ function commitParsedRows() {
   parsedRows = [];
   document.getElementById('parsePreviewWrap').innerHTML = '';
   document.getElementById('pasteArea').value = '';
+  alert(added + '개 추가되었어요.' + (skipped ? ' (' + skipped + '개는 중복이라 건너뜀)' : '') + (group ? ` [그룹: ${group}]` : ''));
+}
+
+/* ---------------- extract vocab from a passage ---------------- */
+const STOPWORDS = new Set([
+  'a','an','the','and','or','but','if','of','at','by','for','with','about','against','between','into','through',
+  'during','before','after','above','below','to','from','up','down','in','out','on','off','over','under','again',
+  'further','then','once','here','there','when','where','why','how','all','any','both','each','few','more','most',
+  'other','some','such','no','nor','not','only','own','same','so','than','too','very','can','will','just','now',
+  'should','would','could','might','must','shall','i','me','my','myself','we','our','ours','ourselves','you','your',
+  'yours','yourself','yourselves','he','him','his','himself','she','her','hers','herself','it','its','itself',
+  'they','them','their','theirs','themselves','what','which','who','whom','this','that','these','those','am','is',
+  'are','was','were','be','been','being','have','has','had','having','do','does','did','doing','because','while',
+  'until','also','still','yet','however','therefore','thus','though','although','since','upon','among','within',
+  'without','toward','towards','per','via','one','two','three','many','much','every','either','neither','get',
+  'got','go','goes','went','going','say','says','said','like','make','made','makes','let','lets','way','ways',
+  "don't","doesn't","isn't","aren't","wasn't","weren't","haven't","hasn't","hadn't","won't","wouldn't","couldn't",
+  "shouldn't","can't","mustn't","it's","that's","there's","he's","she's","i'm","you're","we're","they're","i've",
+  "you've","we've","they've","i'll","you'll","he'll","she'll","we'll","they'll","i'd","you'd","he'd","she'd","we'd","they'd"
+]);
+
+const SYN_DICT = {
+  abandon:[['desert','forsake','relinquish'],['keep','retain']],
+  ability:[['skill','capability','competence'],['inability']],
+  abundant:[['plentiful','ample','copious'],['scarce','sparse']],
+  accurate:[['precise','exact','correct'],['inaccurate','imprecise']],
+  achieve:[['accomplish','attain','fulfill'],['fail']],
+  acquire:[['obtain','gain','procure'],['lose']],
+  adequate:[['sufficient','ample','satisfactory'],['inadequate','insufficient']],
+  admire:[['respect','esteem','appreciate'],['despise','disdain']],
+  adopt:[['embrace','accept'],['reject','abandon']],
+  advantage:[['benefit','edge'],['disadvantage']],
+  adversity:[['hardship','misfortune','difficulty'],['prosperity']],
+  aggressive:[['hostile','combative','forceful'],['passive','peaceful']],
+  ambiguous:[['vague','unclear','equivocal'],['clear','unambiguous']],
+  ancient:[['old','antique','archaic'],['modern','contemporary']],
+  anxious:[['worried','uneasy','nervous'],['calm','relaxed']],
+  apparent:[['obvious','evident','clear'],['unclear','hidden']],
+  appropriate:[['suitable','fitting','proper'],['inappropriate','unsuitable']],
+  approximate:[['rough','estimated'],['exact','precise']],
+  arrogant:[['conceited','haughty','proud'],['humble','modest']],
+  artificial:[['synthetic','fake'],['natural','genuine']],
+  assist:[['help','aid','support'],['hinder','obstruct']],
+  authentic:[['genuine','real','legitimate'],['fake','counterfeit']],
+  available:[['accessible','obtainable'],['unavailable']],
+  average:[['ordinary','typical','mediocre'],['exceptional','extraordinary']],
+  avoid:[['evade','dodge','shun'],['confront','face']],
+  aware:[['conscious','mindful','informed'],['unaware','ignorant']],
+  benefit:[['advantage','gain','profit'],['drawback','loss']],
+  brave:[['courageous','bold','valiant'],['cowardly','timid']],
+  brief:[['short','concise'],['lengthy','long']],
+  brilliant:[['bright','radiant','ingenious'],['dull','unremarkable']],
+  calm:[['peaceful','tranquil','serene'],['anxious','agitated']],
+  capable:[['competent','skilled','able'],['incapable','inept']],
+  careless:[['negligent','reckless','sloppy'],['careful','meticulous']],
+  cautious:[['careful','wary','prudent'],['reckless','careless']],
+  cease:[['stop','halt'],['begin','continue']],
+  chaotic:[['disordered','turbulent','confused'],['orderly','organized']],
+  cheerful:[['happy','joyful','upbeat'],['gloomy','sad']],
+  clarify:[['explain','elucidate'],['confuse','obscure']],
+  clumsy:[['awkward','ungainly'],['graceful','agile']],
+  collapse:[['fall','crumble','topple'],['rise','stand']],
+  combine:[['merge','unite','blend'],['separate','divide']],
+  comfortable:[['cozy','snug','relaxed'],['uncomfortable']],
+  common:[['ordinary','usual','widespread'],['rare','uncommon']],
+  compassion:[['sympathy','empathy','kindness'],['cruelty','indifference']],
+  competent:[['capable','skilled','proficient'],['incompetent']],
+  complex:[['complicated','intricate'],['simple']],
+  conceal:[['hide','disguise','cover'],['reveal','expose']],
+  concise:[['brief','succinct','terse'],['lengthy','verbose']],
+  confident:[['assured','certain'],['insecure','doubtful']],
+  confuse:[['bewilder','puzzle','perplex'],['clarify','enlighten']],
+  consequence:[['result','outcome','effect'],['cause']],
+  considerable:[['significant','substantial'],['negligible','insignificant']],
+  constant:[['continuous','unchanging','steady'],['variable','inconsistent']],
+  contradict:[['dispute','deny','oppose'],['confirm','agree']],
+  convenient:[['handy','useful','practical'],['inconvenient']],
+  cooperate:[['collaborate','unite'],['compete','oppose']],
+  courageous:[['brave','bold','fearless'],['cowardly']],
+  crucial:[['critical','vital','essential'],['trivial','unimportant']],
+  curious:[['inquisitive','interested'],['indifferent','uninterested']],
+  damage:[['harm','injure','ruin'],['repair','restore']],
+  dangerous:[['hazardous','risky','perilous'],['safe']],
+  decline:[['decrease','drop','diminish'],['increase','rise']],
+  decrease:[['reduce','diminish','lessen'],['increase']],
+  defend:[['protect','guard','shield'],['attack']],
+  definite:[['certain','sure','clear'],['uncertain','vague']],
+  delicate:[['fragile','sensitive'],['sturdy','tough']],
+  demolish:[['destroy','raze','wreck'],['build','construct']],
+  dense:[['thick','compact','packed'],['sparse']],
+  deny:[['refuse','reject','disclaim'],['admit','confirm']],
+  depend:[['rely','trust'],[]],
+  deserve:[['merit','earn','warrant'],[]],
+  desperate:[['hopeless','frantic'],['hopeful']],
+  destroy:[['demolish','ruin','wreck'],['create','build']],
+  determine:[['decide','establish','ascertain'],[]],
+  diligent:[['hardworking','industrious'],['lazy']],
+  diminish:[['decrease','reduce','shrink'],['increase','grow']],
+  disaster:[['catastrophe','calamity'],[]],
+  discourage:[['dishearten','deter'],['encourage']],
+  disguise:[['mask','conceal','camouflage'],['reveal']],
+  dismiss:[['reject','disregard'],['accept']],
+  distinct:[['separate','different','clear'],['identical','similar']],
+  distribute:[['allocate','disperse','dispense'],['collect','gather']],
+  diverse:[['varied','assorted','different'],['uniform','similar']],
+  domestic:[['household','native'],['foreign','international']],
+  doubt:[['uncertainty','skepticism'],['confidence','certainty']],
+  durable:[['sturdy','tough'],['fragile','flimsy']],
+  eager:[['enthusiastic','keen','avid'],['reluctant','indifferent']],
+  effective:[['efficient','successful','productive'],['ineffective']],
+  efficient:[['effective','productive','competent'],['inefficient']],
+  elaborate:[['detailed','intricate','complex'],['simple','plain']],
+  eliminate:[['remove','eradicate','abolish'],['add','include']],
+  emerge:[['appear','arise','surface'],['disappear']],
+  emphasize:[['stress','highlight'],['downplay','minimize']],
+  enable:[['allow','permit','facilitate'],['prevent','hinder']],
+  encourage:[['motivate','inspire','support'],['discourage']],
+  enormous:[['huge','immense','gigantic'],['tiny','minuscule']],
+  enthusiastic:[['eager','passionate','keen'],['apathetic','indifferent']],
+  equivalent:[['equal','identical','comparable'],['different']],
+  essential:[['crucial','vital','necessary'],['unnecessary','trivial']],
+  establish:[['found','institute','create'],['dissolve','abolish']],
+  eventually:[['finally','ultimately'],['immediately']],
+  evident:[['obvious','apparent','clear'],['unclear','hidden']],
+  exaggerate:[['overstate','embellish'],['understate','minimize']],
+  excessive:[['extreme','immoderate','extravagant'],['moderate','reasonable']],
+  exhaust:[['tire','drain','deplete'],['refresh','energize']],
+  expand:[['enlarge','extend','grow'],['shrink','contract']],
+  expensive:[['costly','pricey'],['cheap','inexpensive']],
+  extinct:[['dead','vanished'],['existing','living']],
+  extraordinary:[['remarkable','exceptional','unusual'],['ordinary','common']],
+  fade:[['dim','vanish','wane'],['brighten','intensify']],
+  fair:[['just','impartial','equitable'],['unfair','biased']],
+  familiar:[['known','recognizable'],['unfamiliar','strange']],
+  fascinate:[['captivate','enthrall','intrigue'],['bore']],
+  fatigue:[['exhaustion','tiredness','weariness'],['energy','vigor']],
+  feasible:[['possible','achievable','viable'],['impossible','unfeasible']],
+  ferocious:[['fierce','savage','brutal'],['gentle','mild']],
+  flexible:[['adaptable','versatile','pliable'],['rigid','inflexible']],
+  fluent:[['articulate','eloquent'],['inarticulate']],
+  fragile:[['delicate','brittle','breakable'],['sturdy','durable']],
+  frequent:[['common','recurring','regular'],['rare','infrequent']],
+  frustrate:[['discourage','thwart','hinder'],['satisfy','encourage']],
+  generous:[['charitable','giving','unselfish'],['stingy','selfish']],
+  genuine:[['authentic','real','sincere'],['fake','artificial']],
+  gigantic:[['huge','enormous','massive'],['tiny','minuscule']],
+  gloomy:[['dark','dismal','depressing'],['cheerful','bright']],
+  gradual:[['slow','steady','progressive'],['sudden','abrupt']],
+  grateful:[['thankful','appreciative'],['ungrateful']],
+  guarantee:[['ensure','assure','promise'],[]],
+  hardship:[['difficulty','adversity','suffering'],['comfort','ease']],
+  harsh:[['severe','cruel','rough'],['gentle','mild']],
+  hesitate:[['pause','waver','falter'],[]],
+  hostile:[['aggressive','unfriendly','antagonistic'],['friendly','amicable']],
+  huge:[['enormous','massive','gigantic'],['tiny','small']],
+  humble:[['modest','unassuming'],['arrogant','proud']],
+  identical:[['same','alike','matching'],['different']],
+  ignore:[['disregard','overlook','neglect'],['notice','acknowledge']],
+  imaginary:[['fictional','fanciful','unreal'],['real','actual']],
+  immense:[['huge','vast','enormous'],['tiny','minuscule']],
+  imply:[['suggest','hint','indicate'],['state','declare']],
+  inevitable:[['unavoidable','certain'],['avoidable']],
+  influence:[['affect','impact','sway'],[]],
+  initial:[['first','original','primary'],['final','last']],
+  innocent:[['guiltless','blameless'],['guilty']],
+  inquire:[['ask','question','investigate'],[]],
+  insist:[['demand','urge','persist'],[]],
+  inspire:[['motivate','encourage','stimulate'],['discourage']],
+  intense:[['extreme','severe','powerful'],['mild','moderate']],
+  interfere:[['meddle','intervene','disrupt'],[]],
+  intricate:[['complex','complicated','elaborate'],['simple']],
+  invaluable:[['priceless','precious'],['worthless']],
+  isolate:[['separate','seclude','segregate'],['connect','unite']],
+  jealous:[['envious','resentful'],[]],
+  justify:[['defend','validate','explain'],['condemn']],
+  kind:[['gentle','considerate','compassionate'],['cruel','unkind']],
+  lack:[['shortage','deficiency','absence'],['abundance','surplus']],
+  legitimate:[['legal','valid','lawful'],['illegitimate','unlawful']],
+  lenient:[['merciful','tolerant','forgiving'],['strict','harsh']],
+  lethal:[['deadly','fatal'],['harmless']],
+  lively:[['energetic','vibrant','animated'],['dull','lifeless']],
+  logical:[['rational','reasonable','sound'],['illogical','irrational']],
+  lonely:[['solitary','isolated'],['accompanied']],
+  maintain:[['preserve','sustain'],['neglect','abandon']],
+  massive:[['huge','enormous','immense'],['tiny','small']],
+  mature:[['adult','grown','developed'],['immature']],
+  maximum:[['highest','greatest','peak'],['minimum']],
+  minor:[['small','insignificant','slight'],['major','significant']],
+  minimum:[['least','smallest'],['maximum']],
+  miserable:[['unhappy','wretched','gloomy'],['happy','content']],
+  modest:[['humble','unassuming'],['arrogant','boastful']],
+  modify:[['alter','adjust','change'],['preserve']],
+  monotonous:[['boring','tedious','dull'],['exciting','interesting']],
+  mysterious:[['puzzling','enigmatic','strange'],['obvious','clear']],
+  naive:[['innocent','gullible','unsophisticated'],['sophisticated','worldly']],
+  negative:[['unfavorable','pessimistic'],['positive']],
+  neglect:[['ignore','disregard','overlook'],['care','attend']],
+  notorious:[['infamous','disreputable'],['respected']],
+  numerous:[['many','countless','abundant'],['few']],
+  obscure:[['unclear','vague','hidden'],['clear','obvious']],
+  obstacle:[['barrier','hindrance','obstruction'],['aid','help']],
+  obtain:[['acquire','gain','procure'],['lose']],
+  obvious:[['clear','evident','apparent'],['unclear','obscure']],
+  occasional:[['infrequent','sporadic','rare'],['frequent','regular']],
+  optimistic:[['hopeful','positive'],['pessimistic']],
+  ordinary:[['common','usual','typical'],['extraordinary','unusual']],
+  origin:[['source','beginning','root'],['end']],
+  outstanding:[['remarkable','exceptional','excellent'],['ordinary','mediocre']],
+  overcome:[['conquer','defeat','surmount'],['surrender','yield']],
+  passive:[['inactive','submissive'],['active','aggressive']],
+  peculiar:[['strange','odd','unusual'],['normal','ordinary']],
+  permanent:[['lasting','enduring','everlasting'],['temporary']],
+  persuade:[['convince','influence','urge'],['dissuade']],
+  plentiful:[['abundant','ample','copious'],['scarce']],
+  positive:[['optimistic','favorable'],['negative']],
+  practical:[['realistic','sensible','pragmatic'],['impractical','theoretical']],
+  precious:[['valuable','priceless','treasured'],['worthless']],
+  precise:[['exact','accurate','specific'],['imprecise','vague']],
+  predict:[['forecast','anticipate','foresee'],[]],
+  prevent:[['stop','hinder','avert'],['allow','permit']],
+  primitive:[['basic','ancient','undeveloped'],['advanced','modern']],
+  profound:[['deep','intense','significant'],['superficial','shallow']],
+  prohibit:[['forbid','ban','outlaw'],['permit','allow']],
+  prominent:[['notable','distinguished','famous'],['obscure','unknown']],
+  prosper:[['thrive','flourish','succeed'],['fail','decline']],
+  provoke:[['incite','trigger','instigate'],['calm','soothe']],
+  punctual:[['prompt','timely'],['late','tardy']],
+  pursue:[['chase','follow','seek'],['avoid','abandon']],
+  random:[['arbitrary','unplanned'],['deliberate','planned']],
+  rapid:[['fast','swift','quick'],['slow']],
+  rare:[['scarce','uncommon','unusual'],['common','abundant']],
+  reasonable:[['sensible','rational','fair'],['unreasonable','irrational']],
+  reckless:[['careless','rash','hasty'],['cautious','careful']],
+  reduce:[['decrease','diminish','lessen'],['increase']],
+  reject:[['refuse','decline','dismiss'],['accept']],
+  reliable:[['dependable','trustworthy'],['unreliable']],
+  reluctant:[['unwilling','hesitant'],['willing','eager']],
+  remarkable:[['extraordinary','notable','impressive'],['ordinary','unremarkable']],
+  reveal:[['disclose','expose','unveil'],['conceal','hide']],
+  rigid:[['stiff','inflexible','strict'],['flexible']],
+  rural:[['countryside','agricultural'],['urban']],
+  scarce:[['rare','limited','insufficient'],['abundant','plentiful']],
+  severe:[['harsh','extreme','strict'],['mild','lenient']],
+  significant:[['important','notable','considerable'],['insignificant','trivial']],
+  sincere:[['genuine','honest','heartfelt'],['insincere','fake']],
+  skeptical:[['doubtful','dubious'],['convinced','certain']],
+  sophisticated:[['advanced','refined','complex'],['simple','unsophisticated']],
+  spontaneous:[['impulsive','unplanned'],['planned','deliberate']],
+  stable:[['steady','secure','firm'],['unstable']],
+  strict:[['rigid','stern','harsh'],['lenient']],
+  subsequent:[['following','later'],['previous','prior']],
+  substantial:[['significant','considerable'],['insignificant','minor']],
+  subtle:[['delicate','faint','nuanced'],['obvious','blatant']],
+  sufficient:[['adequate','enough','ample'],['insufficient']],
+  superficial:[['shallow','cursory'],['profound','deep']],
+  suppress:[['restrain','stifle','quell'],['release','express']],
+  temporary:[['brief','transient'],['permanent']],
+  tense:[['strained','anxious','taut'],['relaxed','calm']],
+  thorough:[['complete','exhaustive','meticulous'],['careless','incomplete']],
+  tolerate:[['endure','bear','withstand'],['reject','refuse']],
+  tragic:[['disastrous','catastrophic','sad'],['fortunate','happy']],
+  transparent:[['clear','obvious'],['opaque']],
+  trivial:[['minor','insignificant','unimportant'],['significant','important']],
+  typical:[['usual','common','characteristic'],['atypical','unusual']],
+  unanimous:[['united','agreed'],['divided']],
+  unique:[['distinctive','singular'],['common','ordinary']],
+  urban:[['metropolitan','city'],['rural']],
+  urgent:[['pressing','critical','immediate'],[]],
+  vague:[['unclear','ambiguous','obscure'],['clear','precise']],
+  valid:[['legitimate','sound','reasonable'],['invalid']],
+  vast:[['huge','immense','enormous'],['tiny','small']],
+  versatile:[['adaptable','flexible','resourceful'],[]],
+  vivid:[['bright','vibrant','intense'],['dull','faded']],
+  voluntary:[['optional','willing'],['mandatory','compulsory']],
+  vulnerable:[['exposed','defenseless','susceptible'],['protected','secure']],
+  wealthy:[['rich','affluent','prosperous'],['poor']],
+  widespread:[['common','prevalent','extensive'],['rare','limited']],
+  withstand:[['endure','resist','survive'],['succumb']]
+};
+
+function tokenizeWithContext(text) {
+  const tokens = [];
+  const re = /[A-Za-z][A-Za-z'-]*/g;
+  let m;
+  let prevEnd = 0;
+  let atSentenceStart = true;
+  while ((m = re.exec(text)) !== null) {
+    const gap = text.slice(prevEnd, m.index);
+    if (/[.!?]/.test(gap)) atSentenceStart = true;
+    tokens.push({ raw: m[0], sentenceStart: atSentenceStart });
+    atSentenceStart = false;
+    prevEnd = re.lastIndex;
+  }
+  return tokens;
+}
+
+function normalizeWord(raw) {
+  return raw.toLowerCase().replace(/'s$/, '').replace(/^'+|'+$/g, '');
+}
+
+function extractImportantWords(text, minLen, maxCount) {
+  const tokens = tokenizeWithContext(text);
+  const freq = new Map();
+  tokens.forEach(tok => {
+    const isCapitalized = /^[A-Z]/.test(tok.raw);
+    const looksLikeProperNoun = isCapitalized && !tok.sentenceStart;
+    if (looksLikeProperNoun) return;
+    const norm = normalizeWord(tok.raw);
+    if (norm.length < minLen || !/^[a-z]/.test(norm) || STOPWORDS.has(norm)) return;
+    freq.set(norm, (freq.get(norm) || 0) + 1);
+  });
+  const list = Array.from(freq.entries()).map(([word, count]) => ({ word, freq: count, inDict: !!SYN_DICT[word] }));
+  list.sort((a, b) => b.freq - a.freq || b.word.length - a.word.length || a.word.localeCompare(b.word));
+  return list.slice(0, maxCount);
+}
+
+let extractedRows = [];
+
+document.getElementById('extractBtn').addEventListener('click', () => {
+  const text = document.getElementById('extractArea').value;
+  const minLen = parseInt(document.getElementById('extractMinLen').value, 10) || 5;
+  const maxCount = parseInt(document.getElementById('extractMaxCount').value, 10) || 20;
+  if (!text.trim()) { alert('지문을 붙여넣어 주세요.'); return; }
+  const candidates = extractImportantWords(text, minLen, maxCount);
+  const wrap = document.getElementById('extractPreviewWrap');
+  if (candidates.length === 0) {
+    extractedRows = [];
+    wrap.innerHTML = '<p class="empty-note" style="margin-top:0.75rem;">조건에 맞는 단어를 찾지 못했어요. 최소 글자 수를 줄이거나 다른 지문을 시도해보세요.</p>';
+    return;
+  }
+  extractedRows = candidates.map(c => {
+    const dict = SYN_DICT[c.word];
+    return {
+      word: c.word,
+      freq: c.freq,
+      meaning: '',
+      synonyms: dict ? dict[0].slice() : [],
+      antonyms: dict ? dict[1].slice() : [],
+      inDict: c.inDict,
+      include: true
+    };
+  });
+  renderExtractPreview();
+});
+
+document.getElementById('loadSamplePassageBtn').addEventListener('click', () => {
+  document.getElementById('extractArea').value =
+`Many scientists believe that the abundant resources on our planet are not infinite. If people continue to abandon careful habits and pursue excessive consumption, future generations may face a severe hardship. However, some communities have shown remarkable resilience: they cooperate to reduce waste, prioritize genuine sustainability over convenient shortcuts, and remain optimistic that gradual change is still feasible. Their courageous example inspires others to reconsider what they once considered ordinary.`;
+});
+
+function renderExtractPreview() {
+  const wrap = document.getElementById('extractPreviewWrap');
+  if (extractedRows.length === 0) { wrap.innerHTML = ''; return; }
+  const rowsHtml = extractedRows.map((r, i) => `
+    <tr>
+      <td class="chk"><input type="checkbox" ${r.include ? 'checked' : ''} onchange="extractedRows[${i}].include=this.checked"></td>
+      <td><input type="text" value="${escapeAttr(r.word)}" oninput="extractedRows[${i}].word=this.value"></td>
+      <td class="muted" style="white-space:nowrap;">${r.freq}회 ${r.inDict ? '<span class="tag">사전</span>' : ''}</td>
+      <td><input type="text" value="${escapeAttr(r.meaning)}" placeholder="뜻 입력" oninput="extractedRows[${i}].meaning=this.value"></td>
+      <td><input type="text" value="${escapeAttr(r.synonyms.join(', '))}" placeholder="동의어" oninput="extractedRows[${i}].synonyms=splitList(this.value)"></td>
+      <td><input type="text" value="${escapeAttr(r.antonyms.join(', '))}" placeholder="반의어" oninput="extractedRows[${i}].antonyms=splitList(this.value)"></td>
+      <td><button class="btn small danger" onclick="removeExtractedRow(${i})">삭제</button></td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <h3>추출 결과 (${extractedRows.length}개) — 뜻을 입력하고 필요한 단어만 선택해 추가하세요</h3>
+    <p class="hint" style="margin-top:-4px;">"사전" 표시가 있는 단어는 동의어·반의어가 자동으로 채워졌어요. 없는 단어는 직접 입력해주세요.</p>
+    <table class="preview-table">
+      <thead><tr><th></th><th>단어</th><th>빈도</th><th>뜻</th><th>동의어</th><th>반의어</th><th></th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="btn-row">
+      <button class="btn primary" id="commitExtractBtn">✅ 선택한 단어 단어장에 추가</button>
+    </div>`;
+  document.getElementById('commitExtractBtn').addEventListener('click', commitExtractedRows);
+}
+function removeExtractedRow(i) {
+  extractedRows.splice(i, 1);
+  renderExtractPreview();
+}
+function commitExtractedRows() {
+  const group = document.getElementById('extractGroup').value.trim();
+  let added = 0, skipped = 0;
+  extractedRows.filter(r => r.include && r.word).forEach(r => {
+    if (words.some(w => w.word.toLowerCase() === r.word.toLowerCase())) { skipped++; return; }
+    words.push({
+      id: genId(),
+      word: r.word.trim(),
+      meaning: (r.meaning || '').trim(),
+      synonyms: r.synonyms || [],
+      antonyms: r.antonyms || [],
+      group,
+      createdAt: Date.now()
+    });
+    added++;
+  });
+  saveWords();
+  renderWordList();
+  refreshGroupOptions();
+  renderGroupFilter();
+  extractedRows = [];
+  document.getElementById('extractPreviewWrap').innerHTML = '';
+  document.getElementById('extractArea').value = '';
   alert(added + '개 추가되었어요.' + (skipped ? ' (' + skipped + '개는 중복이라 건너뜀)' : '') + (group ? ` [그룹: ${group}]` : ''));
 }
 
