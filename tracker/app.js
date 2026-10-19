@@ -43,6 +43,7 @@ const EPS = 1e-9;
 const lsGet = (k, f) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch { return f; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const lsDel = k => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
+const IN_ARTIFACT = !!(window.claude && typeof window.claude.use === 'function');
 const LS_ROWS = 'jt.rows.v1', LS_REMOTE = 'jt.remote.v1', LS_UI = 'jt.ui.v1', LS_CACHE = 'jt.cache.v1', LS_PENDING = 'jt.pending.v1';
 
 let toastTimer;
@@ -74,6 +75,12 @@ const Store = {
   emit() { this.ver++; this.subs.forEach(f => f()); },
 
   async init() {
+    if (IN_ARTIFACT) {
+      if (await this.initDb()) return;
+      this.dbMissing = true;
+      this.loadLocal(); this.ready = true; this.emit();
+      return;
+    }
     this.remote = remoteConfig();
     if (!this.remote) {
       this.loadLocal(); this.ready = true;
@@ -90,6 +97,82 @@ const Store = {
     setInterval(() => this.poll(), 8000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.poll(); });
     window.addEventListener('online', () => this.poll());
+  },
+
+  /* ---- claude.ai 아티팩트 공유 저장소 ----
+   * classes/{classId}            : { data }
+   * logs/{classId}__{studentId}  : { class_id, items: { logId: 기록 | {deleted:true} } }
+   * 학생별 문서에 기록을 병합(update)하므로 여러 사람이 동시에 추가해도 덮어쓰지 않는다. */
+  async initDb() {
+    let db = null;
+    try { db = await window.claude.use('db'); } catch { db = null; }
+    if (!db) return false;
+    this.db = db; this.mode = 'db'; this.status = 'syncing';
+    this.classRows = new Map(); this.logDocs = new Map(); this.watching = undefined;
+    try {
+      const u = await window.claude.use('user');
+      if (u) { const w = await u.can('data.write'); if (w === false) this.readOnly = true; }
+    } catch { /* 권한 정보 없음: 쓰기 실패로 판단 */ }
+    db.collection('classes').onSnapshot(snap => {
+      this.classRows = new Map(snap.docs.map(d => [d.id, { id: d.id, kind: 'class', class_id: null, data: d.data().data || {}, deleted: false }]));
+      this.ready = true; this.rebuild();
+    }, e => this.dbErr(e));
+    return true;
+  },
+  watchClass(classId) {
+    if (this.mode !== 'db' || this.watching === classId) return;
+    this.watching = classId;
+    if (this.unsubLogs) this.unsubLogs();
+    this.unsubLogs = null; this.logDocs = new Map();
+    if (!classId) return;
+    this.unsubLogs = this.db.collection('logs').where('class_id', '==', classId).onSnapshot(snap => {
+      this.logDocs = new Map(snap.docs.map(d => [d.id, d.data()])); this.rebuild();
+    }, e => this.dbErr(e));
+  },
+  rebuild() {
+    const rows = new Map(this.classRows);
+    for (const body of this.logDocs.values()) {
+      for (const [id, l] of Object.entries(body.items || {})) if (l && !l.deleted) rows.set(id, { id, kind: 'log', class_id: body.class_id, data: l, deleted: false });
+    }
+    this.rows = rows; this.status = 'online'; this.lastSync = new Date(); this.emit();
+  },
+  dbErr(e) {
+    this.status = 'error'; this.error = (e && e.message) || String(e); renderSync();
+  },
+  async putDb(rows) {
+    const ops = [], groups = new Map();
+    for (const r of rows) {
+      if (r.kind === 'class') {
+        if (r.deleted) {
+          ops.push(() => this.db.doc('classes/' + r.id).delete());
+          for (const [docId, b] of this.logDocs) if (b.class_id === r.id) ops.push(() => this.db.doc('logs/' + docId).delete());
+        } else ops.push(() => this.db.doc('classes/' + r.id).set({ data: r.data }));
+      } else if (r.kind === 'log' && r.data && r.data.sid) {
+        const key = r.class_id + '__' + r.data.sid;
+        const g = groups.get(key) || { class_id: r.class_id, items: {} };
+        g.items[r.id] = r.deleted ? { deleted: true } : { ...r.data };
+        groups.set(key, g);
+      }
+    }
+    for (const [key, g] of groups) {
+      ops.push(async () => {
+        const ref = this.db.doc('logs/' + key);
+        let exists = this.logDocs.has(key);
+        if (!exists) exists = (await ref.get()).exists;
+        if (exists) await ref.update({ items: g.items });
+        else await ref.set({ class_id: g.class_id, items: g.items });
+      });
+    }
+    for (const op of ops) {
+      try { await op(); }
+      catch (e) {
+        const code = e && e.code;
+        if (code === 'invalid_argument') { this.readOnly = true; toast('이 아티팩트에 쓸 권한이 없습니다. 소유자에게 기여자(Contributor) 이상 권한을 요청하세요.', 'bad'); }
+        else if (code === 'quota_exceeded') toast('저장 공간이 가득 찼습니다. 지난 시험의 반을 백업 후 삭제하세요.', 'bad');
+        else toast('저장하지 못했습니다: ' + ((e && e.message) || e), 'bad');
+        renderSync(); return;
+      }
+    }
   },
 
   loadLocal() { this.rows = new Map(lsGet(LS_ROWS, []).map(r => [r.id, r])); this.status = 'local'; },
@@ -152,6 +235,7 @@ const Store = {
   /** 행 저장(삭제는 deleted:true). 화면에는 즉시 반영하고 서버에는 이어서 전송. */
   async put(rows) {
     if (!rows.length) return;
+    if (this.mode === 'db') return this.putDb(rows);
     for (const r of rows) this.applyLocal(r);
     if (!this.remote) { this.saveLocal(); this.emit(); return; }
     for (const r of rows) this.pending.set(r.id, r);
@@ -274,7 +358,9 @@ document.addEventListener('focusout', () => setTimeout(() => { if (renderPending
 function renderSync() {
   const el = $('#sync'); if (!el) return;
   let cls = Store.status, txt;
-  if (!Store.remote) txt = '이 기기에 저장';
+  if (Store.mode === 'db') txt = Store.status === 'error' ? '저장소 오류' : Store.readOnly ? '보기 전용' : '공유 저장 · 실시간';
+  else if (IN_ARTIFACT) txt = '이 브라우저에만 저장';
+  else if (!Store.remote) txt = '이 기기에 저장';
   else if (Store.status === 'online') txt = '공유 · ' + (Store.lastSync ? Store.lastSync.toTimeString().slice(0, 5) : '') + ' 동기화' + (Store.pending.size ? ` · 대기 ${Store.pending.size}` : '');
   else if (Store.status === 'syncing') txt = '동기화 중';
   else txt = '연결 오류 · 재시도 중' + (Store.pending.size ? ` (${Store.pending.size}건 대기)` : '');
@@ -285,6 +371,7 @@ function render() {
   renderSync();
   const row = curClassRow();
   if (row) UI.classId = row.id;
+  Store.watchClass(row ? row.id : null);
   const cs = classes();
   $('#classes').innerHTML = cs.map(r => `<button class="cchip" data-act="class" data-id="${esc(r.id)}" aria-pressed="${r.id === UI.classId}">${esc(r.data.name || '이름 없는 반')}</button>`).join('')
     + `<button class="cchip add" data-act="new-class">+ 새 반</button>`;
@@ -312,7 +399,7 @@ function viewWelcome() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn primary" data-act="new-class">새 반 만들기</button>
       <button class="btn" data-act="sample">예시 반 불러오기</button>
-      <button class="btn" data-act="tab-settings-global">공유 서버 연결 · 백업 불러오기</button>
+      <button class="btn" data-act="tab-settings-global">${IN_ARTIFACT ? '백업 파일 불러오기 · 저장 방식' : '공유 서버 연결 · 백업 불러오기'}</button>
     </div>
     ${UI.showGlobal ? `<div class="panel">${viewStorage()}</div>` : ''}
   </section>`;
@@ -571,12 +658,25 @@ function viewSettings(c) {
   <section class="sec"><div class="sec-head"><h2>저장 · 공유 · 앱 설치</h2><span class="hint">모든 반에 적용</span></div><div class="panel">${viewStorage()}</div></section>`;
 }
 
+function viewStorageArtifact() {
+  const backup = `<div style="display:flex;flex-direction:column;gap:6px"><h3>백업</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" data-act="export-json">전체 백업 파일 저장 (.json)</button><button class="btn" data-act="import-json">백업 파일 불러오기</button></div>
+    <p class="small muted" style="margin:0">불러오기는 기존 데이터에 합쳐집니다. GitHub 버전 앱과 같은 형식이라 서로 옮길 수 있습니다.</p></div>`;
+  const head = Store.mode === 'db'
+    ? `<div style="display:flex;flex-direction:column;gap:6px"><h3>${Store.readOnly ? '보기 전용으로 열려 있습니다' : '이 페이지의 공유 저장소에 실시간 저장 중'}</h3>
+        <p class="small muted" style="margin:0">이 링크를 여는 사람은 모두 같은 데이터를 봅니다. 함께 기록할 선생님은 오른쪽 위 <b>공유</b> 메뉴에서 <b>기여자(Contributor)</b> 이상으로 초대하세요. 보기(Viewer) 권한은 읽기만 됩니다. claude.ai에 로그인한 사람만 데이터를 볼 수 있습니다.</p></div>`
+    : `<div style="display:flex;flex-direction:column;gap:6px"><h3>이 브라우저에만 저장 중</h3>
+        <p class="small muted" style="margin:0">claude.ai에 로그인하지 않았거나 공유 저장소를 쓸 수 없는 상태라, 기록이 이 브라우저에만 남습니다. 로그인하면 공유 저장소에 저장됩니다.</p></div>`;
+  return `<div style="display:flex;flex-direction:column;gap:18px">${head}${backup}</div>`;
+}
+
 function shareLink() {
   if (!Store.remote) return '';
   return location.origin + location.pathname + '#join=' + b64e(JSON.stringify({ u: Store.remote.u, k: Store.remote.k }));
 }
 
 function viewStorage() {
+  if (IN_ARTIFACT) return viewStorageArtifact();
   const localCount = lsGet(LS_ROWS, []).length;
   const install = deferredInstall ? `<button class="btn primary" data-act="install">앱 설치</button>` : '';
   const appHelp = `<div style="display:flex;flex-direction:column;gap:6px"><h3>앱으로 설치</h3>
@@ -729,7 +829,14 @@ async function deleteClass() {
   toast('반을 삭제했습니다');
 }
 
-function download(filename, text, type) {
+async function download(filename, text, type) {
+  if (IN_ARTIFACT) {
+    let dl = null; try { dl = await window.claude.use('downloads'); } catch { dl = null; }
+    if (!dl) { toast('이 화면에서는 파일 저장을 쓸 수 없습니다.', 'bad'); return; }
+    try { await dl.save({ filename, data: new Blob([text], { type }) }); }
+    catch (e) { if (!e || e.code !== 'declined') toast('파일을 저장하지 못했습니다.', 'bad'); }
+    return;
+  }
   const blob = new Blob([text], { type });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -903,7 +1010,7 @@ document.addEventListener('keydown', e => {
 /* ================= 앱 설치(PWA) ================= */
 let deferredInstall = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (UI.tab === 'settings' || !curClassRow()) scheduleRender(); });
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if (!IN_ARTIFACT && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ================= 시작 ================= */
 (function joinFromLink() {
