@@ -175,7 +175,7 @@ const S = {
   editing: null,     // {id?, data:{no,date,passages}}
   copying: null, remindN: null, aiBusy: false, aiText: '', sideOpen: false,
   present: null, downloads: null, timerMin: +store.get('remind.min') || 10,
-  blankLevel: ['flow', 'word', 'both'].includes(store.get('remind.level')) ? store.get('remind.level') : 'flow'
+  blankLevel: store.get('remind.level') === 'vocab' ? 'vocab' : 'key'
 };
 let unsubSess = null;
 
@@ -287,23 +287,29 @@ function classFormHtml() {
    ctx null = normal view (key words highlighted); otherwise {n, answers, mode:'screen'|'print'}
    shares one counter, so the class screen and the printed sheet number blanks identically. */
 const unbr = s => String(s || '').replace(/\[([^\]]+)\]/g, '$1');
-// ctx.level: 'word' = bracketed words + vocab; 'flow' = whole content lines (gist, structure steps, points);
-// 'both' = content lines plus vocab and grammar blanks.
-const BLANK_LEVELS = { flow: '내용 흐름', word: '핵심어', both: '내용 + 핵심어' };
-function blank(ans, ctx, long) {
+// Blanks go on key words and key phrases inside the content, so the rest of each sentence stays as a cue.
+// ctx.level: 'key' = bracketed key words/phrases only; 'vocab' = also the words in the vocab list.
+// ctx.auto: this passage's vocab words, blanked wherever they appear in a line that has no brackets.
+const BLANK_LEVELS = { key: '핵심어·구문', vocab: '핵심어·구문 + 어휘' };
+function blank(ans, ctx) {
   if (!ctx) return `<mark class="kw">${esc(ans)}</mark>`;
   const n = ++ctx.n; ctx.answers.push(ans);
-  const w = (long ? Math.min(30, Math.max(8, ans.length * 0.95 + 2)) : Math.min(14, Math.max(4.5, ans.length * 0.65 + 2))).toFixed(1);
+  const w = Math.min(14, Math.max(4.5, ans.length * 0.65 + 2)).toFixed(1);
   if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">(${n})</span>`;
   return `<button class="blank" data-act="reveal" data-n="${n}" data-ans="${esc(ans)}" style="min-width:${w}em" aria-label="빈칸 ${n}">${n}</button>`;
 }
-const rich = (text, ctx) => String(text || '').split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
-const words = ctx => ctx && ctx.level !== 'flow' ? ctx : null;
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function rich(text, ctx) {
+  let t = String(text || '');
+  if (ctx && ctx.auto && ctx.auto.length && !t.includes('['))
+    t = t.replace(new RegExp('\\b(' + ctx.auto.map(reEsc).join('|') + ')\\b', 'gi'), '[$1]');
+  return t.split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
+}
+const vocabWord = l => (l.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+[^A-Za-z]/) || [])[1];
+const hasKeyBlanks = p => ['gist', 'flow', 'points', 'structure'].some(k => String(p[k] || '').includes('['));
 const levelOpts = () => Object.entries(BLANK_LEVELS).map(([k, v]) => `<option value="${k}" ${k === S.blankLevel ? 'selected' : ''}>빈칸: ${v}</option>`).join('');
-// A content line: blanked whole in the content modes, otherwise only its bracketed words.
-const seg = (text, ctx) => ctx && ctx.level !== 'word' ? blank(unbr(text), ctx, true) : rich(text, ctx);
 function vocabItem(line, ctx) {
-  ctx = words(ctx);
+  ctx = ctx && ctx.level === 'vocab' ? ctx : null;
   const m = !line.includes('[') && line.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+([^A-Za-z].*)$/);
   return m && ctx ? blank(m[1], ctx) + ' ' + esc(m[2]) : rich(line, ctx);
 }
@@ -311,23 +317,24 @@ function flowHtml(text, ctx, mini) {
   const steps = lines(text).map(l => { const k = l.indexOf(':'); return k > 0 && k < 14 ? [l.slice(0, k).trim(), l.slice(k + 1).trim()] : ['', l]; });
   if (!steps.length) return '';
   if (mini) return `<div class="flow-mini">구조 · ${steps.map(([a, b]) => a ? `<b>${esc(unbr(a))}</b>` : esc(unbr(b)).slice(0, 12)).join(' → ')}</div>`;
-  return `<ol class="flow">${steps.map(([a, b]) => `<li>${a ? `<span class="step">${esc(unbr(a))}</span>` : '<span></span>'}<span>${seg(b, ctx)}</span></li>`).join('')}</ol>`;
+  return `<ol class="flow">${steps.map(([a, b]) => `<li>${a ? `<span class="step">${esc(unbr(a))}</span>` : '<span></span>'}<span>${rich(b, ctx)}</span></li>`).join('')}</ol>`;
 }
 function passageHtml(p, t, ctx) {
   const pts = lines(p.points), voc = lines(p.vocab), st = lines(p.structure);
+  if (ctx) ctx.auto = voc.map(vocabWord).filter(Boolean);
   const title = esc(unbr(p.title) || '제목 없는 지문');
-  if (t === 'short') return `<div class="psg"><span class="psg-title">${title}</span>${p.gist ? ` — <span class="gist"><span class="m">${seg(p.gist, ctx)}</span></span>` : ''}</div>`;
+  if (t === 'short') return `<div class="psg"><span class="psg-title">${title}</span>${p.gist ? ` — <span class="gist"><span class="m">${rich(p.gist, ctx)}</span></span>` : ''}</div>`;
   if (t === 'mid') return `<div class="psg"><div class="psg-title">${title}</div>
-    ${p.gist ? `<p class="gist"><span class="m">${seg(p.gist, ctx)}</span></p>` : ''}
+    ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx, true)}
-    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${seg(x, ctx)}</li>`).join('')}</ul>` : ''}</div>`;
+    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}</div>`;
   return `<div class="psg">
     <div class="psg-title">${title}</div>
-    ${p.gist ? `<p class="gist"><span class="m">${seg(p.gist, ctx)}</span></p>` : ''}
+    ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx)}
-    ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${seg(x, ctx)}</li>`).join('')}</ul>` : ''}
+    ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}
     ${voc.length ? `<div class="chips">${voc.map(x => `<span class="chip">${vocabItem(x, ctx)}</span>`).join('')}</div>` : ''}
-    ${st.length ? `<div class="struct">${st.map(x => `<div>${rich(x, words(ctx))}</div>`).join('')}</div>` : ''}
+    ${st.length ? `<div class="struct">${st.map(x => `<div>${rich(x, ctx)}</div>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -376,7 +383,8 @@ function editorHtml() {
       <div class="pe-tools">
         ${S.sample ? `<button class="btn" data-act="p-ai" data-i="${i}" ${p._busy ? 'disabled' : ''}>${p._busy ? 'AI가 요약하는 중…' : 'AI로 아래 칸 채우기'}</button>` : ''}
         <button class="btn" data-act="p-blank" data-i="${i}">선택한 말을 빈칸으로</button>
-        <span class="hint">아래 칸에서 말을 드래그해 고르고 누르면 [대괄호]로 묶여 빈칸이 돼요.</span>
+        ${S.sample ? `<button class="btn" data-act="p-keys" data-i="${i}" ${p._busy ? 'disabled' : ''}>AI 핵심어 빈칸 추천</button>` : ''}
+        <span class="hint">아래 칸에서 핵심어나 핵심 구문을 드래그해 고르고 누르면 [대괄호]로 묶여 빈칸이 돼요.</span>
       </div>
       <label>한 줄 요지<input type="text" id="p-${p.id}-gist" data-i="${i}" data-f="gist" placeholder="예: 기술 발전이 오히려 [집중력]을 떨어뜨린다" value="${esc(p.gist)}"></label>
       <label>글의 구조 <span class="hint">한 줄에 한 단계 · "단계: 내용"</span>
@@ -430,10 +438,11 @@ function remindHtml() {
       <button class="btn" data-act="present">정답 화면으로 띄우기</button>
       ${S.downloads ? `<button class="btn" data-act="sheet">학습지 저장 (인쇄용)</button>` : ''}</div>
     <p class="note">바로 지난 회차는 자세히, 2~3회 전은 요지와 포인트 두 개, 그보다 오래된 회차는 요지 한 줄로 줄여서 보여 줘요.<br>
-      ${{ flow: '<b>내용 흐름</b>: 요지, 글의 구조 각 단계, 시험 포인트 문장을 통째로 가려요. 구조 단계 이름은 남겨 두어 흐름을 떠올리는 힌트가 돼요.',
-          word: '<b>핵심어</b>: 기록할 때 [대괄호]로 묶은 말과 중요 어휘만 가려요.',
-          both: '<b>내용 + 핵심어</b>: 내용 문장과 함께 어휘·구문의 핵심어도 가려요.' }[S.blankLevel]}
-      지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
+      요지·글의 구조·시험 포인트·구문 문장 속 <b>핵심어와 핵심 구문</b>([대괄호]로 묶은 말)만 빈칸이 되고, 나머지 문장은 남아서 내용을 떠올리는 실마리가 돼요.
+      ${S.blankLevel === 'vocab' ? '중요 어휘 목록의 단어도 가려요. ' : ''}지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
+  const bare = prev.flatMap(s => s.passages || []).filter(p => !hasKeyBlanks(p)).length;
+  if (bare) h += `<div class="banner row">핵심어 빈칸을 정하지 않은 지문이 <b>${bare}개</b> 있어요. 이 지문들은 어휘 목록 단어만 빈칸이 돼요.
+      <span class="spacer"></span>${S.sample && !S.readOnly ? `<button class="btn" data-act="ai-keys" ${S.keysBusy ? 'disabled' : ''}>${S.keysBusy ? 'AI가 고르는 중…' : 'AI로 핵심어 빈칸 정하기'}</button>` : ''}</div>`;
   if (S.sample) {
     const text = S.aiBusy ? S.aiText : saved ? saved.text : '';
     h += `<div class="ai" style="margin-bottom:16px">
@@ -469,7 +478,7 @@ async function aiFill(i) {
       '너는 한국 고등학교 영어 내신 수업을 돕는 조교야. 아래 영어 지문(또는 수업 메모)을 읽고, 다음 수업 시작 때 10분 복습에 쓸 요약을 만들어.\n' +
       '반드시 JSON 객체 하나만 답해. 형식:\n' +
       '{"title":"출처를 알 수 있으면 짧게, 모르면 빈 문자열","gist":"한국어 한 줄 요지 (40자 이내)","flow":["글의 구조를 3~5단계로, 각 항목은 \'단계: 내용\' 형식 (단계 예: 도입, 통념, 주장, 반박, 근거, 예시, 결론)"],"points":["핵심 내용·시험 포인트 3~5개, 한국어 한 줄씩 (빈칸·순서·삽입·어법 출제 포인트 포함)"],"vocab":["중요 어휘 5~8개, \'word 뜻\' 형식"],"structure":["시험에 나올 핵심 구문·어법 2~3개, 원문 표현 + 짧은 설명"]}\n' +
-      '학생 복습용 빈칸 퀴즈로도 쓸 거야. gist, flow, points, structure 각 항목에서 학생이 꼭 기억해야 할 핵심어 1~2개를 [대괄호]로 묶어 줘 (예: "정보 과잉은 [판단력]을 떨어뜨린다"). vocab에는 대괄호를 쓰지 마.\n\n' +
+      '학생 복습용 빈칸 퀴즈로도 쓸 거야. gist, flow, points, structure 각 항목에서 학생이 꼭 기억해야 할 핵심어나 짧은 핵심 구문(1~4단어) 1~2개만 [대괄호]로 묶어 줘 (예: "정보 과잉은 [판단력]을 떨어뜨린다"). 문장 전체를 묶지 말고, flow의 단계 이름과 vocab에는 대괄호를 쓰지 마.\n\n' +
       '지문/메모:\n' + String(p.raw).slice(0, 15000));
     const arr = v => Array.isArray(v) ? v.map(String).join('\n') : String(v || '');
     if (!p.title && r.title) p.title = String(r.title);
@@ -481,6 +490,54 @@ async function aiFill(i) {
     toast('AI 초안을 채웠어요. 확인하고 저장해 주세요.');
   } catch (e) { const t = errText(e); if (t) toast(t); }
   finally { p._busy = false; render(); }
+}
+
+// Ask Claude to bracket 1-2 key words or short key phrases per line. A line comes back only with brackets
+// added; if Claude changed any other character, the original line is kept.
+async function aiKeyBlanks(passages) {
+  const items = passages.map(p => ({ id: p.id, gist: unbr(p.gist), flow: lines(unbr(p.flow)), points: lines(unbr(p.points)), structure: lines(unbr(p.structure)) }));
+  const r = await S.sample.json(
+    '고등학교 영어 내신 수업의 지문 복습용 빈칸 퀴즈를 만들려고 해. 아래 각 줄에서 학생이 내용의 핵심을 떠올리는 데 꼭 필요한 핵심 키워드나 핵심 구문을 1~2개만 [대괄호]로 묶어 줘.\n' +
+    '규칙:\n- 묶는 부분은 1~4단어 정도로 짧게. 문장 전체나 절 전체를 묶지 마. 빈칸 밖에 남은 말만 보고도 무엇이 들어갈지 떠올릴 수 있어야 해.\n' +
+    '- flow 줄의 "단계:" 이름(콜론 앞)은 묶지 마.\n- structure 줄에서는 시험에 나올 구문·어법의 핵심 부분(예: not so much A [as] B)을 묶어.\n' +
+    '- 대괄호만 추가하고 글자는 하나도 바꾸거나 빼지 마. 줄 수와 순서도 그대로.\n' +
+    '반드시 JSON 객체 하나만 답해: {"passages":[{"id":"...","gist":"...","flow":["..."],"points":["..."],"structure":["..."]}]}\n\n' +
+    JSON.stringify({ passages: items }));
+  const got = new Map((Array.isArray(r && r.passages) ? r.passages : []).map(x => [String(x && x.id), x]));
+  const fix = (orig, cand) => typeof cand === 'string' && cand.includes('[') && unbr(cand).trim() === unbr(orig).trim() ? cand.trim() : orig;
+  const fixLines = (text, arr) => lines(text).map((l, k) => fix(l, Array.isArray(arr) ? arr[k] : null)).join('\n');
+  return passages.map(p => {
+    const x = got.get(p.id); if (!x) return p;
+    return { ...p, gist: fix(p.gist || '', x.gist), flow: fixLines(p.flow, x.flow), points: fixLines(p.points, x.points), structure: fixLines(p.structure, x.structure) };
+  });
+}
+async function aiKeysOne(i) {
+  const p = S.editing.data.passages[i];
+  if (!['gist', 'flow', 'points', 'structure'].some(k => String(p[k] || '').trim())) return toast('요지나 구조, 포인트를 먼저 적어 주세요.');
+  p._busy = true; render();
+  try {
+    const [q] = await aiKeyBlanks([p]);
+    Object.assign(p, { gist: q.gist, flow: q.flow, points: q.points, structure: q.structure });
+    toast(hasKeyBlanks(p) ? '핵심어에 빈칸 표시를 했어요. 확인하고 저장해 주세요.' : 'AI가 빈칸을 고르지 못했어요. 직접 골라 주세요.');
+  } catch (e) { const t = errText(e); if (t) toast(t); }
+  finally { p._busy = false; render(); }
+}
+async function aiKeysRemind() {
+  const N = S.remindN || maxNo() + 1, cid = S.cid;
+  const targets = prevOf(N).filter(s => (s.passages || []).some(p => !hasKeyBlanks(p)));
+  S.keysBusy = true; render();
+  let done = 0;
+  try {
+    for (const s of targets) {
+      const bare = s.passages.filter(p => !hasKeyBlanks(p));
+      const fixed = new Map((await aiKeyBlanks(bare)).map(p => [p.id, p]));
+      const passages = s.passages.map(p => fixed.get(p.id) || p);
+      if (passages.some((p, k) => p !== s.passages[k] && hasKeyBlanks(p)) &&
+          await write(() => S.db.doc(`classes/${cid}/sessions/${s.id}`).update({ passages, updatedAt: new Date().toISOString() }))) done++;
+    }
+    toast(done ? `${done}개 회차에 핵심어 빈칸을 정했어요. 회차 기록에서 고칠 수 있어요.` : 'AI가 빈칸을 고르지 못했어요. 회차 기록에서 직접 골라 주세요.');
+  } catch (e) { const t = errText(e); if (t) toast(t); }
+  finally { S.keysBusy = false; render(); }
 }
 
 let aiCtl = null;
@@ -689,6 +746,8 @@ document.addEventListener('click', async e => {
     case 'p-add': S.editing.data.passages.push(blankPassage()); render(); break;
     case 'p-del': S.editing.data.passages.splice(i, 1); if (!S.editing.data.passages.length) S.editing.data.passages.push(blankPassage()); render(); break;
     case 'p-ai': aiFill(i); break;
+    case 'p-keys': aiKeysOne(i); break;
+    case 'ai-keys': aiKeysRemind(); break;
     case 'p-blank': {
       const el = lastField;
       if (!el || !document.contains(el) || +el.dataset.i !== i || el.dataset.f === 'raw' || el.dataset.f === 'title' || el.selectionStart === el.selectionEnd)
