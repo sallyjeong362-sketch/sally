@@ -110,6 +110,7 @@ textarea{resize:vertical;min-height:64px;line-height:1.5}
 /* key words, blanks, passage structure */
 mark.kw{background:none;color:var(--accent);font-weight:700}
 .blank{display:inline-block;min-width:4.5em;border:0;border-bottom:2px solid var(--accent);background:var(--soft);color:var(--accent);font-family:var(--f-mono);font-size:.85em;padding:0 8px;margin:0 2px;border-radius:4px 4px 0 0;cursor:pointer;line-height:1.5;vertical-align:baseline}
+.blank{max-width:100%;white-space:normal;text-align:left}
 .blank.open{font-family:var(--f-body);font-size:1em;font-weight:700;background:var(--mark);color:var(--mark-ink);border-color:var(--mark-ink)}
 .flow{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:0}
 .flow li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:baseline;padding:6px 0 6px 12px;border-left:2px solid var(--line);position:relative}
@@ -173,7 +174,8 @@ const S = {
   classForm: null,   // {id?, school, grade, name}
   editing: null,     // {id?, data:{no,date,passages}}
   copying: null, remindN: null, aiBusy: false, aiText: '', sideOpen: false,
-  present: null, downloads: null, timerMin: +store.get('remind.min') || 10
+  present: null, downloads: null, timerMin: +store.get('remind.min') || 10,
+  blankLevel: ['flow', 'word', 'both'].includes(store.get('remind.level')) ? store.get('remind.level') : 'flow'
 };
 let unsubSess = null;
 
@@ -285,15 +287,23 @@ function classFormHtml() {
    ctx null = normal view (key words highlighted); otherwise {n, answers, mode:'screen'|'print'}
    shares one counter, so the class screen and the printed sheet number blanks identically. */
 const unbr = s => String(s || '').replace(/\[([^\]]+)\]/g, '$1');
-function blank(ans, ctx) {
+// ctx.level: 'word' = bracketed words + vocab; 'flow' = whole content lines (gist, structure steps, points);
+// 'both' = content lines plus vocab and grammar blanks.
+const BLANK_LEVELS = { flow: '내용 흐름', word: '핵심어', both: '내용 + 핵심어' };
+function blank(ans, ctx, long) {
   if (!ctx) return `<mark class="kw">${esc(ans)}</mark>`;
   const n = ++ctx.n; ctx.answers.push(ans);
-  const w = Math.min(14, Math.max(4.5, ans.length * 0.65 + 2)).toFixed(1);
+  const w = (long ? Math.min(30, Math.max(8, ans.length * 0.95 + 2)) : Math.min(14, Math.max(4.5, ans.length * 0.65 + 2))).toFixed(1);
   if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">(${n})</span>`;
   return `<button class="blank" data-act="reveal" data-n="${n}" data-ans="${esc(ans)}" style="min-width:${w}em" aria-label="빈칸 ${n}">${n}</button>`;
 }
 const rich = (text, ctx) => String(text || '').split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
+const words = ctx => ctx && ctx.level !== 'flow' ? ctx : null;
+const levelOpts = () => Object.entries(BLANK_LEVELS).map(([k, v]) => `<option value="${k}" ${k === S.blankLevel ? 'selected' : ''}>빈칸: ${v}</option>`).join('');
+// A content line: blanked whole in the content modes, otherwise only its bracketed words.
+const seg = (text, ctx) => ctx && ctx.level !== 'word' ? blank(unbr(text), ctx, true) : rich(text, ctx);
 function vocabItem(line, ctx) {
+  ctx = words(ctx);
   const m = !line.includes('[') && line.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+([^A-Za-z].*)$/);
   return m && ctx ? blank(m[1], ctx) + ' ' + esc(m[2]) : rich(line, ctx);
 }
@@ -301,23 +311,23 @@ function flowHtml(text, ctx, mini) {
   const steps = lines(text).map(l => { const k = l.indexOf(':'); return k > 0 && k < 14 ? [l.slice(0, k).trim(), l.slice(k + 1).trim()] : ['', l]; });
   if (!steps.length) return '';
   if (mini) return `<div class="flow-mini">구조 · ${steps.map(([a, b]) => a ? `<b>${esc(unbr(a))}</b>` : esc(unbr(b)).slice(0, 12)).join(' → ')}</div>`;
-  return `<ol class="flow">${steps.map(([a, b]) => `<li>${a ? `<span class="step">${esc(unbr(a))}</span>` : '<span></span>'}<span>${rich(b, ctx)}</span></li>`).join('')}</ol>`;
+  return `<ol class="flow">${steps.map(([a, b]) => `<li>${a ? `<span class="step">${esc(unbr(a))}</span>` : '<span></span>'}<span>${seg(b, ctx)}</span></li>`).join('')}</ol>`;
 }
 function passageHtml(p, t, ctx) {
   const pts = lines(p.points), voc = lines(p.vocab), st = lines(p.structure);
   const title = esc(unbr(p.title) || '제목 없는 지문');
-  if (t === 'short') return `<div class="psg"><span class="psg-title">${title}</span>${p.gist ? ` — <span class="gist"><span class="m">${rich(p.gist, ctx)}</span></span>` : ''}</div>`;
+  if (t === 'short') return `<div class="psg"><span class="psg-title">${title}</span>${p.gist ? ` — <span class="gist"><span class="m">${seg(p.gist, ctx)}</span></span>` : ''}</div>`;
   if (t === 'mid') return `<div class="psg"><div class="psg-title">${title}</div>
-    ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
+    ${p.gist ? `<p class="gist"><span class="m">${seg(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx, true)}
-    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}</div>`;
+    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${seg(x, ctx)}</li>`).join('')}</ul>` : ''}</div>`;
   return `<div class="psg">
     <div class="psg-title">${title}</div>
-    ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
+    ${p.gist ? `<p class="gist"><span class="m">${seg(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx)}
-    ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}
+    ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${seg(x, ctx)}</li>`).join('')}</ul>` : ''}
     ${voc.length ? `<div class="chips">${voc.map(x => `<span class="chip">${vocabItem(x, ctx)}</span>`).join('')}</div>` : ''}
-    ${st.length ? `<div class="struct">${st.map(x => `<div>${rich(x, ctx)}</div>`).join('')}</div>` : ''}
+    ${st.length ? `<div class="struct">${st.map(x => `<div>${rich(x, words(ctx))}</div>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -399,7 +409,7 @@ function remindSession(s, N, big, ctx) {
 }
 // One pass over sessions 1..N-1 with a shared blank counter (mode null = answers shown).
 function buildRemind(N, mode, big) {
-  const ctx = mode ? { n: 0, answers: [], mode } : null;
+  const ctx = mode ? { n: 0, answers: [], mode, level: S.blankLevel } : null;
   const parts = prevOf(N).map(s => ({ s, html: remindSession(s, N, big, ctx) }));
   return { parts, answers: ctx ? ctx.answers : [] };
 }
@@ -415,11 +425,15 @@ function remindHtml() {
   const nBlanks = buildRemind(N, 'print').answers.length;
   let h = `<div class="row" style="margin-bottom:10px">
       <select id="remind-n" aria-label="리마인드할 수업" style="width:auto;max-width:100%">${opts}</select>
+      <select id="blank-level" aria-label="빈칸 방식" style="width:auto">${levelOpts()}</select>
       <button class="btn primary" data-act="present" data-blanks="1">▶ 빈칸 퀴즈로 띄우기</button>
       <button class="btn" data-act="present">정답 화면으로 띄우기</button>
       ${S.downloads ? `<button class="btn" data-act="sheet">학습지 저장 (인쇄용)</button>` : ''}</div>
     <p class="note">바로 지난 회차는 자세히, 2~3회 전은 요지와 포인트 두 개, 그보다 오래된 회차는 요지 한 줄로 줄여서 보여 줘요.<br>
-      기록할 때 <b>[대괄호]</b>로 묶은 말과 중요 어휘가 빈칸이 돼요. 지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
+      ${{ flow: '<b>내용 흐름</b>: 요지, 글의 구조 각 단계, 시험 포인트 문장을 통째로 가려요. 구조 단계 이름은 남겨 두어 흐름을 떠올리는 힌트가 돼요.',
+          word: '<b>핵심어</b>: 기록할 때 [대괄호]로 묶은 말과 중요 어휘만 가려요.',
+          both: '<b>내용 + 핵심어</b>: 내용 문장과 함께 어휘·구문의 핵심어도 가려요.' }[S.blankLevel]}
+      지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
   if (S.sample) {
     const text = S.aiBusy ? S.aiText : saved ? saved.text : '';
     h += `<div class="ai" style="margin-bottom:16px">
@@ -516,7 +530,8 @@ function drawPresent() {
       ${!fresh && !P.running ? `<button class="btn ghost" data-act="pr-reset">처음으로</button>` : ''}
       <span class="spacer"></span>
       <button class="btn" data-act="pr-mode">${P.blanks ? '정답 화면으로' : '빈칸 퀴즈로'}</button>
-      ${P.blanks ? `<button class="btn" data-act="pr-openall">이 화면 정답 보기</button>` : ''}
+      ${P.blanks ? `<select id="pr-level" aria-label="빈칸 방식" style="width:auto">${levelOpts()}</select>
+        <button class="btn" data-act="pr-openall">이 화면 정답 보기</button>` : ''}
       <span class="pr-count">${P.i + 1} / ${P.slides.length}</span>
       <button class="btn" data-act="pr-prev" ${P.i === 0 ? 'disabled' : ''} aria-label="이전">←</button>
       <button class="btn primary" data-act="pr-next" ${P.i === P.slides.length - 1 ? 'disabled' : ''} aria-label="다음">→</button>
@@ -554,7 +569,7 @@ ul.pts{margin:4px 0 0;padding-left:20px}
 .flow li{border-left:2px solid #999;padding:2px 0 2px 10px}
 .step{font-weight:700;font-size:9pt;border:1px solid #999;border-radius:3px;padding:0 5px;margin-right:6px}
 .flow-mini{font-size:9.5pt;color:#444}
-.bl{display:inline-block;border-bottom:1.5px solid #111;text-align:left;font-size:8.5pt;color:#555;margin:0 2px;line-height:1.4;vertical-align:baseline}
+.bl{display:inline-block;max-width:100%;border-bottom:1.5px solid #111;text-align:left;font-size:8.5pt;color:#555;margin:0 2px;line-height:1.4;vertical-align:baseline}
 .key{break-before:page;page-break-before:always}
 .key ol{columns:3;font-size:10.5pt}
 .tools{margin-bottom:14px}
@@ -562,10 +577,10 @@ ul.pts{margin:4px 0 0;padding-left:20px}
 @media print{.tools{display:none}body{padding:0}}
 </style></head><body>
 <div class="tools"><button onclick="window.print()">인쇄하기</button> 정답은 마지막 쪽에 있어요. 학생용은 앞쪽만 인쇄하세요.</div>
-<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">1~${N - 1}회차 복습 · 빈칸 ${answers.length}개</div></div>
+<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">1~${N - 1}회차 복습 · 빈칸(${BLANK_LEVELS[S.blankLevel]}) ${answers.length}개</div></div>
 <div class="name">이름 ____________ &nbsp; 점수 ____ / ${answers.length}</div></div>
 ${parts.map(p => p.html).join('\n')}
-<section class="key"><h1>정답 · ${esc(title)}</h1><ol>${answers.map(a => `<li>${esc(a)}</li>`).join('')}</ol></section>
+<section class="key"><h1>정답 · ${esc(title)}</h1><ol${answers.some(a => a.length > 14) ? ' style="columns:1"' : ''}>${answers.map(a => `<li>${esc(a)}</li>`).join('')}</ol></section>
 </body></html>`;
 }
 async function saveSheet() {
@@ -609,6 +624,11 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'remind-n') { S.remindN = +e.target.value; S.aiText = ''; render(); }
+  if (e.target.id === 'blank-level' || e.target.id === 'pr-level') {
+    S.blankLevel = e.target.value; store.set('remind.level', S.blankLevel);
+    if (S.present) { S.present.open.clear(); S.present.slides = buildSlides(S.present.N, S.present.blanks); drawPresent(); }
+    render();
+  }
   if (e.target.id === 'pr-min' && S.present) {
     S.timerMin = +e.target.value; store.set('remind.min', String(S.timerMin));
     S.present.left = S.timerMin * 60; S.present.slides = buildSlides(S.present.N, S.present.blanks); drawPresent();
