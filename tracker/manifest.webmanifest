@@ -1,0 +1,17 @@
+{
+  "name": "내신 지문 트래커",
+  "short_name": "지문트래커",
+  "description": "지문별 9단계 내신점검시험과 변형문제를 반·학생별로 기록하고 추적합니다.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F3F4F6",
+  "theme_color": "#23365C",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
