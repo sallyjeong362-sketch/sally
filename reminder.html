@@ -1,0 +1,599 @@
+<title>지문 리마인더</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: teacher's binder — class tree on the left, the selected class's lesson log or reminder on the right. */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#1D2939; --muted:#5F6B7A; --line:#D9DFE7;
+  --accent:#2B59C3; --accent-ink:#FFFFFF; --mark:#FFE15A; --mark-ink:#1D2939;
+  --danger:#B42318; --soft:#E8EEFA;
+  --f-display:"Do Hyeon","Noto Sans KR",system-ui,sans-serif;
+  --f-body:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151B; --surface:#1A2029; --ink:#E5E9EF; --muted:#9AA5B3; --line:#2B3440;
+  --accent:#7EA1FF; --accent-ink:#0E1420; --mark:#6B5A12; --mark-ink:#FFF3B8;
+  --danger:#FF8A80; --soft:#1F2A3D; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151B; --surface:#1A2029; --ink:#E5E9EF; --muted:#9AA5B3; --line:#2B3440;
+  --accent:#7EA1FF; --accent-ink:#0E1420; --mark:#6B5A12; --mark-ink:#FFF3B8;
+  --danger:#FF8A80; --soft:#1F2A3D; color-scheme:dark}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.6}
+*{box-sizing:border-box}
+button,input,textarea,select{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;margin:0;text-wrap:balance;letter-spacing:.01em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}
+aside{border-right:1px solid var(--line);background:var(--surface);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px}
+main{padding-block:24px 64px;padding-left:28px;padding-right:max(16px,env(safe-area-inset-right,0px));min-width:0}
+.wrap{max-width:860px}
+
+.brand{font-family:var(--f-display);font-size:24px;line-height:1.2}
+.brand small{display:block;font-family:var(--f-body);font-size:12px;color:var(--muted);letter-spacing:.02em}
+.side-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side-toggle{display:none}
+.side-body{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.school>.lbl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.grade{margin-top:4px}
+.grade>.lbl{font-size:13px;color:var(--muted);padding-left:2px}
+.cls{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:15px}
+.cls:hover{background:var(--soft)}
+.cls[aria-current="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.cls .cnt{float:right;font-family:var(--f-mono);font-size:12px;opacity:.75}
+
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.ghost{border-color:transparent;background:none;padding:6px 8px;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink)}
+.btn.danger{color:var(--danger)}
+.btn[disabled]{opacity:.5;cursor:default}
+.btn.block{width:100%;justify-content:center}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spacer{flex:1}
+
+.crumb{font-size:13px;color:var(--muted)}
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.head h1{font-size:34px;line-height:1.15}
+.tabs{display:flex;gap:4px;margin:20px 0 18px;border-bottom:1px solid var(--line)}
+.tab{border:0;background:none;padding:10px 14px;cursor:pointer;font-size:15px;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:700;border-color:var(--accent)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.sess-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline}
+.no{font-family:var(--f-mono);font-size:13px;background:var(--ink);color:var(--surface);padding:2px 8px;border-radius:4px}
+.date{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.psg{padding:12px 0;border-top:1px dashed var(--line)}
+.psg:first-of-type{border-top:0}
+.psg-title{font-weight:700}
+.gist{margin:2px 0 0}
+.gist .m{background:linear-gradient(transparent 55%,var(--mark) 55%);color:inherit}
+ul.pts{margin:6px 0 0;padding-left:20px}
+ul.pts li{margin:2px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:13px;border:1px solid var(--line);border-radius:999px;padding:1px 10px;background:var(--bg)}
+.struct{margin-top:6px;font-size:14px;color:var(--muted)}
+.struct div::before{content:"구문 · ";font-weight:700;color:var(--ink)}
+.muted{color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);font-weight:400}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty h2{color:var(--ink);font-size:24px;margin-bottom:6px}
+
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700}
+input[type=text],input[type=date],textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;font-weight:400;font-size:15px}
+textarea{resize:vertical;min-height:64px;line-height:1.5}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.pe{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.pe-head{display:flex;gap:8px;align-items:center}
+.pe-head .tag{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.pe-head input{flex:1;min-width:0;font-weight:700}
+
+.tier{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent)}
+.tier.full{background:var(--mark);color:var(--mark-ink)}
+.note{font-size:13px;color:var(--muted);margin:0 0 14px}
+.ai{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.ai pre{white-space:pre-wrap;font-family:var(--f-body);margin:10px 0 0;font-size:15px;line-height:1.7}
+.ai h3{font-size:19px}
+
+.banner{border:1px solid var(--line);background:var(--surface);border-left:4px solid var(--accent);padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px}
+.confirm{position:fixed;inset:0;background:rgba(10,14,20,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40}
+.confirm .card{max-width:380px;width:100%}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:8px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
+
+/* presentation */
+#present{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.pr-bar{display:flex;align-items:center;gap:10px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.timer{font-family:var(--f-mono);font-size:22px;font-variant-numeric:tabular-nums}
+.timer.over{color:var(--danger)}
+.pr-body{flex:1;overflow:auto;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.pr-slide{max-width:1000px;margin:0 auto;font-size:clamp(17px,2.2vw,24px);line-height:1.6}
+.pr-slide h2{font-size:clamp(30px,4.5vw,52px);margin-bottom:12px}
+.pr-slide .chip{font-size:.8em}
+.pr-slide .psg{padding:18px 0}
+.pr-count{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr}
+  aside{border-right:0;border-bottom:1px solid var(--line);padding-block:12px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .side-toggle{display:inline-flex}
+  .side-body{display:none}
+  aside.open .side-body{display:flex}
+  main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-block:18px 48px}
+  .head h1{font-size:28px}
+  .card{padding:14px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside id="side"></aside>
+  <main id="main"><div class="wrap"><p class="muted">불러오는 중…</p></div></main>
+</div>
+<div id="present" hidden></div>
+<div id="confirm" hidden></div>
+<div id="toast" hidden></div>
+
+<script>
+const use = n => (window.claude && window.claude.use) ? window.claude.use(n) : Promise.resolve(null);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lines = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean);
+const rid = () => Math.random().toString(36).slice(2, 10);
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const ko = (a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true });
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+const S = {
+  db: null, sample: null, ready: false, noDb: false, readOnly: false,
+  classes: [], sessions: [], sessLoaded: false, cid: store.get('remind.cid'),
+  view: store.get('remind.view') || 'log',
+  classForm: null,   // {id?, school, grade, name}
+  editing: null,     // {id?, data:{no,date,passages}}
+  copying: null, remindN: null, aiBusy: false, aiText: '', sideOpen: false,
+  present: null
+};
+let unsubSess = null;
+
+/* ---------- data ---------- */
+function selectClass(cid) {
+  if (unsubSess) { unsubSess(); unsubSess = null; }
+  S.cid = cid; S.sessions = []; S.sessLoaded = false; S.editing = null; S.copying = null; S.remindN = null; S.aiText = '';
+  if (cid) store.set('remind.cid', cid);
+  if (!cid || !S.db) return render();
+  unsubSess = S.db.collection(`classes/${cid}/sessions`).orderBy('no').onSnapshot(snap => {
+    S.sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    S.sessLoaded = true; render();
+  }, err => { toast('회차 기록을 불러오지 못했어요. 새로고침해 주세요.'); });
+  render();
+}
+const cls = () => S.classes.find(c => c.id === S.cid);
+const maxNo = () => S.sessions.reduce((m, s) => Math.max(m, s.no || 0), 0);
+
+async function write(fn, okMsg) {
+  try { await fn(); if (okMsg) toast(okMsg); return true; }
+  catch (e) {
+    if (e && e.code === 'invalid_argument') { S.readOnly = true; render(); toast('이 계정은 보기 권한만 있어서 저장할 수 없어요.'); }
+    else if (e && e.code === 'quota_exceeded') toast('저장 공간이 가득 찼어요. 오래된 회차를 지워 주세요.');
+    else toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    return false;
+  }
+}
+
+/* ---------- side ---------- */
+function renderSide() {
+  const c = cls();
+  const groups = {};
+  for (const k of S.classes) ((groups[k.school || '학교 미지정'] ||= {})[k.grade || '학년 미지정'] ||= []).push(k);
+  let tree = '';
+  for (const sch of Object.keys(groups).sort(ko)) {
+    tree += `<div class="school"><div class="lbl">${esc(sch)}</div>`;
+    for (const gr of Object.keys(groups[sch]).sort(ko)) {
+      tree += `<div class="grade"><div class="lbl">${esc(gr)}</div>`;
+      for (const k of groups[sch][gr].sort((a, b) => ko(a.name, b.name)))
+        tree += `<button class="cls" data-act="sel" data-id="${esc(k.id)}" aria-current="${k.id === S.cid}">${esc(k.name)}</button>`;
+      tree += `</div>`;
+    }
+    tree += `</div>`;
+  }
+  $('#side').className = S.sideOpen ? 'open' : '';
+  $('#side').innerHTML = `
+    <div class="side-top">
+      <div class="brand">지문 리마인더<small>내신 수업 10분 복습 노트</small></div>
+      <button class="btn side-toggle" data-act="side" aria-expanded="${S.sideOpen}">${c ? esc(c.name) : '반 목록'} ▾</button>
+    </div>
+    <div class="side-body">
+      ${tree || (S.ready ? '<p class="muted" style="margin:0">아직 만든 반이 없어요.</p>' : '')}
+      ${S.db && !S.readOnly ? `<button class="btn block" data-act="cls-new">+ 반 추가</button>` : ''}
+    </div>`;
+}
+
+/* ---------- main ---------- */
+function render() {
+  renderSide();
+  const m = $('#main');
+  if (S.noDb) {
+    m.innerHTML = `<div class="wrap"><div class="card empty"><h2>claude.ai에서 열어 주세요</h2>
+      <p>수업 기록은 온라인 저장소에 보관돼요. claude.ai에 로그인한 상태로 이 페이지를 열면 기록을 보고 저장할 수 있어요.</p></div></div>`;
+    return;
+  }
+  if (!S.ready) { m.innerHTML = `<div class="wrap"><p class="muted">불러오는 중…</p></div>`; return; }
+  let h = '<div class="wrap">';
+  if (S.readOnly) h += `<div class="banner">보기 전용이에요. 기록을 추가하거나 고치려면 이 페이지의 주인에게 편집 권한을 받아야 해요.</div>`;
+  if (S.classForm) h += classFormHtml();
+  const c = cls();
+  if (!c && !S.classForm) {
+    h += `<div class="card empty"><h2>첫 반을 만들어 볼까요?</h2>
+      <p>학교 · 학년 · 반을 만들고, 수업이 끝날 때마다 다룬 지문을 회차별로 적어 두세요.<br>다음 수업 시작할 때 <b>리마인드</b> 탭에서 지난 회차들을 한 번에 복습할 수 있어요.</p>
+      ${S.readOnly ? '' : '<button class="btn primary" data-act="cls-new">+ 반 추가</button>'}</div>`;
+  }
+  if (c && !(S.classForm && S.classForm.id === c.id)) {
+    h += `<div class="head"><div><div class="crumb">${esc(c.school)} › ${esc(c.grade)}</div><h1>${esc(c.name)}</h1></div>
+      ${S.readOnly ? '' : `<button class="btn ghost" data-act="cls-edit">반 정보 수정</button>`}</div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-act="view" data-v="log" aria-selected="${S.view === 'log'}">회차 기록 <span class="hint">${S.sessions.length}</span></button>
+        <button class="tab" role="tab" data-act="view" data-v="remind" aria-selected="${S.view === 'remind'}">리마인드</button>
+      </div>`;
+    h += !S.sessLoaded ? '<p class="muted">불러오는 중…</p>' : S.view === 'remind' ? remindHtml() : logHtml();
+  }
+  h += '</div>';
+  m.innerHTML = h;
+}
+
+function classFormHtml() {
+  const f = S.classForm;
+  const opts = key => [...new Set(S.classes.map(k => k[key]).filter(Boolean))].sort(ko).map(v => `<option value="${esc(v)}">`).join('');
+  return `<div class="card stack" style="margin-bottom:20px">
+    <h2 style="font-size:22px">${f.id ? '반 정보 수정' : '새 반 만들기'}</h2>
+    <div class="grid3">
+      <label>학교<input type="text" id="cf-school" data-cf="school" list="dl-school" placeholder="예: 한빛고" value="${esc(f.school)}"></label>
+      <label>학년<input type="text" id="cf-grade" data-cf="grade" list="dl-grade" placeholder="예: 고2" value="${esc(f.grade)}"></label>
+      <label>반<input type="text" id="cf-name" data-cf="name" placeholder="예: 3반, 화목 7시반" value="${esc(f.name)}"></label>
+    </div>
+    <datalist id="dl-school">${opts('school')}</datalist><datalist id="dl-grade">${opts('grade')}</datalist>
+    <div class="row">
+      <button class="btn primary" data-act="cls-save">${f.id ? '저장' : '만들기'}</button>
+      <button class="btn" data-act="cls-cancel">취소</button>
+      <span class="spacer"></span>
+      ${f.id ? `<button class="btn danger" data-act="cls-del">이 반 삭제</button>` : ''}
+    </div></div>`;
+}
+
+/* --- log view --- */
+function passageView(p) {
+  const pts = lines(p.points), voc = lines(p.vocab), st = lines(p.structure);
+  return `<div class="psg">
+    <div class="psg-title">${esc(p.title || '제목 없는 지문')}</div>
+    ${p.gist ? `<p class="gist"><span class="m">${esc(p.gist)}</span></p>` : ''}
+    ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${voc.length ? `<div class="chips">${voc.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
+    ${st.length ? `<div class="struct">${st.map(x => `<div>${esc(x)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function logHtml() {
+  let h = '';
+  if (!S.readOnly && !(S.editing && !S.editing.id))
+    h += `<div class="row" style="margin-bottom:14px"><button class="btn primary" data-act="sess-new">+ ${maxNo() + 1}회차 기록하기</button>
+      <span class="hint">수업이 끝나면 오늘 다룬 지문을 적어 두세요.</span></div>`;
+  if (S.editing && !S.editing.id) h += editorHtml();
+  const list = [...S.sessions].sort((a, b) => b.no - a.no);
+  if (!list.length && !S.editing)
+    h += `<div class="card empty"><h2>아직 기록한 회차가 없어요</h2><p>1회차 수업에서 다룬 지문의 요지, 시험 포인트, 어휘를 적어 두면<br>2회차부터 리마인드 탭에 자동으로 정리돼요.</p></div>`;
+  h += '<div class="stack">';
+  for (const s of list) {
+    if (S.editing && S.editing.id === s.id) { h += editorHtml(); continue; }
+    const others = S.classes.filter(k => k.id !== S.cid);
+    h += `<div class="card">
+      <div class="sess-head"><span class="no">${s.no}회차</span><span class="date">${esc(s.date || '')}</span>
+        <span class="hint">지문 ${(s.passages || []).length}개</span><span class="spacer"></span>
+        ${S.readOnly ? '' : `<button class="btn ghost" data-act="sess-edit" data-id="${s.id}">수정</button>
+        ${others.length ? `<button class="btn ghost" data-act="copy-open" data-id="${s.id}">다른 반에 복사</button>` : ''}`}
+      </div>
+      ${S.copying === s.id ? `<div class="row" style="margin-top:10px">
+        <select id="copy-to" aria-label="복사할 반">${others.sort((a, b) => ko(a.school + a.grade + a.name, b.school + b.grade + b.name)).map(k => `<option value="${k.id}">${esc(k.school)} ${esc(k.grade)} ${esc(k.name)}</option>`).join('')}</select>
+        <button class="btn primary" data-act="copy-do" data-id="${s.id}">복사</button><button class="btn" data-act="copy-cancel">취소</button></div>` : ''}
+      <div style="margin-top:8px">${(s.passages || []).map(passageView).join('') || '<p class="muted">적어 둔 지문이 없어요.</p>'}</div>
+    </div>`;
+  }
+  return h + '</div>';
+}
+
+function editorHtml() {
+  const d = S.editing.data;
+  return `<div class="card stack" style="margin-bottom:14px;border-color:var(--accent)">
+    <div class="row"><span class="no">${d.no}회차</span><h2 style="font-size:22px">${S.editing.id ? '기록 수정' : '오늘 수업 기록'}</h2></div>
+    <div class="grid3"><label>수업 날짜<input type="date" id="ed-date" data-sf="date" value="${esc(d.date)}"></label></div>
+    ${d.passages.map((p, i) => `<div class="pe">
+      <div class="pe-head"><span class="tag">지문 ${i + 1}</span>
+        <input type="text" id="p-${p.id}-title" data-i="${i}" data-f="title" placeholder="출처 · 번호 (예: 수특 영어 3강 2번)" value="${esc(p.title)}" aria-label="지문 제목">
+        <button class="btn ghost" data-act="p-del" data-i="${i}" aria-label="지문 ${i + 1} 삭제">삭제</button></div>
+      <label>원문 또는 수업 메모 <span class="hint">AI 요약에 쓰여요. 비워 둬도 돼요.</span>
+        <textarea id="p-${p.id}-raw" data-i="${i}" data-f="raw" rows="4" placeholder="지문 원문을 붙여넣거나, 수업 때 강조한 내용을 메모해 두세요.">${esc(p.raw)}</textarea></label>
+      ${S.sample ? `<div><button class="btn" data-act="p-ai" data-i="${i}" ${p._busy ? 'disabled' : ''}>${p._busy ? 'AI가 요약하는 중…' : 'AI로 아래 칸 채우기'}</button></div>` : ''}
+      <label>한 줄 요지<input type="text" id="p-${p.id}-gist" data-i="${i}" data-f="gist" placeholder="예: 기술 발전이 오히려 집중력을 떨어뜨린다" value="${esc(p.gist)}"></label>
+      <label>핵심 내용 · 시험 포인트 <span class="hint">한 줄에 하나씩</span>
+        <textarea id="p-${p.id}-points" data-i="${i}" data-f="points" rows="3" placeholder="예: 빈칸 — 'paradox' 앞뒤 대조 구조">${esc(p.points)}</textarea></label>
+      <div class="grid2">
+        <label>중요 어휘 <span class="hint">한 줄에 하나 · 단어 뜻</span>
+          <textarea id="p-${p.id}-vocab" data-i="${i}" data-f="vocab" rows="3" placeholder="deteriorate 악화되다">${esc(p.vocab)}</textarea></label>
+        <label>핵심 구문 · 어법 <span class="hint">한 줄에 하나씩</span>
+          <textarea id="p-${p.id}-structure" data-i="${i}" data-f="structure" rows="3" placeholder="It is not until A that B">${esc(p.structure)}</textarea></label>
+      </div></div>`).join('')}
+    <div><button class="btn" data-act="p-add">+ 지문 추가</button></div>
+    <div class="row">
+      <button class="btn primary" data-act="sess-save">저장</button><button class="btn" data-act="sess-cancel">취소</button>
+      <span class="spacer"></span>${S.editing.id ? `<button class="btn danger" data-act="sess-del">이 회차 삭제</button>` : ''}
+    </div></div>`;
+}
+
+/* --- remind view --- */
+const prevOf = N => S.sessions.filter(s => s.no < N).sort((a, b) => a.no - b.no);
+const tierOf = (N, no) => { const d = N - no; return d <= 1 ? 'full' : d <= 3 ? 'mid' : 'short'; };
+const tierLabel = (N, no) => N - no <= 1 ? '지난 시간' : `${N - no}회 전`;
+
+function remindPassage(p, t) {
+  const pts = lines(p.points);
+  if (t === 'short') return `<div class="psg"><span class="psg-title">${esc(p.title || '지문')}</span>${p.gist ? ` — <span class="gist"><span class="m">${esc(p.gist)}</span></span>` : ''}</div>`;
+  if (t === 'mid') return `<div class="psg"><div class="psg-title">${esc(p.title || '지문')}</div>
+    ${p.gist ? `<p class="gist"><span class="m">${esc(p.gist)}</span></p>` : ''}
+    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>`;
+  return passageView(p);
+}
+function remindSession(s, N, big) {
+  const t = tierOf(N, s.no);
+  return `<div class="${big ? '' : 'card'}">
+    <div class="sess-head">${big ? `<h2 style="margin:0">${s.no}회차</h2>` : `<span class="no">${s.no}회차</span>`}<span class="date">${esc(s.date || '')}</span><span class="tier ${t}">${tierLabel(N, s.no)}</span></div>
+    <div style="margin-top:6px">${(s.passages || []).map(p => remindPassage(p, t)).join('') || '<p class="muted">적어 둔 지문이 없어요.</p>'}</div></div>`;
+}
+
+function remindHtml() {
+  const mx = maxNo();
+  if (!mx) return `<div class="card empty"><h2>복습할 회차가 아직 없어요</h2><p>회차 기록 탭에서 1회차 수업 내용을 먼저 적어 주세요.</p></div>`;
+  const N = S.remindN || mx + 1;
+  const prev = prevOf(N);
+  const saved = (cls().reminders || {})[String(N)];
+  let opts = '';
+  for (let n = mx + 1; n >= 2; n--) opts += `<option value="${n}" ${n === N ? 'selected' : ''}>${n === mx + 1 ? `다음 수업 (${n}회차)` : `${n}회차 수업`} · 1~${n - 1}회차 복습</option>`;
+  let h = `<div class="row" style="margin-bottom:10px">
+      <select id="remind-n" data-act-change="remind-n" aria-label="리마인드할 수업" style="width:auto;max-width:100%">${opts}</select>
+      <button class="btn primary" data-act="present">▶ 수업 화면으로 띄우기</button></div>
+    <p class="note">바로 지난 회차는 자세히, 2~3회 전은 요지와 포인트 두 개, 그보다 오래된 회차는 요지 한 줄로 줄여서 보여 줘요.</p>`;
+  if (S.sample) {
+    const text = S.aiBusy ? S.aiText : saved ? saved.text : '';
+    h += `<div class="ai" style="margin-bottom:16px">
+      <div class="row"><h3>AI 누적 정리</h3><span class="spacer"></span>
+        ${S.aiBusy ? `<button class="btn" data-act="ai-stop">멈추기</button>`
+          : S.readOnly ? '' : `<button class="btn" data-act="ai-remind">${saved ? '다시 만들기' : `1~${N - 1}회차 한 번에 정리하기`}</button>`}</div>
+      ${S.aiBusy && !S.aiText ? '<p class="muted" style="margin:8px 0 0">정리하는 중… (보통 10~30초 걸려요)</p>' : ''}
+      ${text ? `<pre id="ai-out">${esc(text)}</pre>` : S.aiBusy ? '<pre id="ai-out"></pre>' : `<p class="muted" style="margin:6px 0 0">지난 회차 기록을 읽고 10분 복습용 요약과 확인 질문을 만들어 줘요. 만든 내용은 이 반에 저장돼요.</p>`}
+      ${saved && !S.aiBusy ? `<p class="hint" style="margin:8px 0 0">${new Date(saved.at).toLocaleString('ko-KR')}에 만듦</p>` : ''}
+    </div>`;
+  }
+  h += `<div class="stack">${prev.map(s => remindSession(s, N)).join('')}</div>`;
+  return h;
+}
+
+/* ---------- AI ---------- */
+function errText(e) {
+  const c = e && e.code;
+  if (c === 'not_granted' || c === 'sampling_disabled') return 'AI 사용이 허용되지 않았어요. 직접 입력해 주세요.';
+  if (c === 'rate_limited') return 'AI 사용량이 많아요. 잠시 후 다시 눌러 주세요.';
+  if (c === 'invalid_json') return 'AI 답을 읽지 못했어요. 한 번 더 눌러 주세요.';
+  if (c === 'prompt_too_large') return '내용이 너무 길어요. 원문을 조금 줄여 주세요.';
+  if (c === 'cancelled') return '';
+  return 'AI가 답하지 못했어요. 잠시 후 다시 시도해 주세요.';
+}
+
+async function aiFill(i) {
+  const p = S.editing.data.passages[i];
+  if (!String(p.raw || '').trim()) return toast('원문이나 수업 메모를 먼저 붙여넣어 주세요.');
+  p._busy = true; render();
+  try {
+    const r = await S.sample.json(
+      '너는 한국 고등학교 영어 내신 수업을 돕는 조교야. 아래 영어 지문(또는 수업 메모)을 읽고, 다음 수업 시작 때 10분 복습에 쓸 요약을 만들어.\n' +
+      '반드시 JSON 객체 하나만 답해. 형식:\n' +
+      '{"title":"출처를 알 수 있으면 짧게, 모르면 빈 문자열","gist":"한국어 한 줄 요지 (40자 이내)","points":["핵심 내용·시험 포인트 3~5개, 한국어 한 줄씩 (빈칸·순서·삽입·어법 출제 포인트 포함)"],"vocab":["중요 어휘 5~8개, \'word 뜻\' 형식"],"structure":["시험에 나올 핵심 구문·어법 2~3개, 원문 표현 + 짧은 설명"]}\n\n' +
+      '지문/메모:\n' + String(p.raw).slice(0, 15000));
+    const arr = v => Array.isArray(v) ? v.map(String).join('\n') : String(v || '');
+    if (!p.title && r.title) p.title = String(r.title);
+    if (r.gist) p.gist = String(r.gist);
+    if (r.points) p.points = arr(r.points);
+    if (r.vocab) p.vocab = arr(r.vocab);
+    if (r.structure) p.structure = arr(r.structure);
+    toast('AI 초안을 채웠어요. 확인하고 저장해 주세요.');
+  } catch (e) { const t = errText(e); if (t) toast(t); }
+  finally { p._busy = false; render(); }
+}
+
+let aiCtl = null;
+async function aiRemind() {
+  const N = S.remindN || maxNo() + 1, cid = S.cid;
+  const prev = prevOf(N);
+  const rec = prev.map(s => `[${s.no}회차 · ${s.date || ''} · ${tierLabel(N, s.no)}]\n` + (s.passages || []).map(p =>
+    `- 지문: ${p.title || '제목 없음'}\n  요지: ${p.gist || ''}\n  포인트: ${lines(p.points).join(' / ')}\n  어휘: ${lines(p.vocab).join(', ')}\n  구문: ${lines(p.structure).join(' / ')}`).join('\n')).join('\n\n');
+  S.aiBusy = true; S.aiText = ''; aiCtl = new AbortController(); render();
+  try {
+    const { text } = await S.sample(
+      `다음은 한 반의 고등학교 영어 내신 수업에서 지난 회차들에 다룬 지문 기록이야. 오늘 ${N}회차 수업을 시작하며 10분 동안 학생들과 복습할 누적 리마인드를 한국어로 만들어 줘.\n` +
+      `규칙:\n- 회차 순서대로 "■ k회차" 제목을 달아.\n- 지난 시간 회차는 지문마다 요지, 시험 포인트 2~3개, 핵심 어휘 몇 개까지.\n- 2~3회 전 회차는 지문마다 요지와 포인트 1개.\n- 그보다 오래된 회차는 지문마다 한 줄로만.\n- 맨 끝에 "■ 확인 질문"으로 학생에게 바로 물어볼 짧은 질문 3~5개.\n- #, ** 같은 마크다운 기호 없이 일반 텍스트로. 기록에 없는 내용은 지어내지 마.\n\n기록:\n${rec.slice(0, 60000)}`,
+      { signal: aiCtl.signal, cache: false, onText: ({ text }) => { S.aiText = text; const o = $('#ai-out'); if (o) o.textContent = text; else render(); } });
+    S.aiBusy = false; render();
+    await write(() => S.db.doc(`classes/${cid}`).update({ reminders: { [String(N)]: { text, at: new Date().toISOString() } } }), '정리한 내용을 저장했어요.');
+  } catch (e) { S.aiBusy = false; render(); const t = errText(e); if (t) toast(t); }
+}
+
+/* ---------- presentation ---------- */
+let timerId = null;
+function openPresent() {
+  const N = S.remindN || maxNo() + 1;
+  const prev = prevOf(N), c = cls(), saved = (c.reminders || {})[String(N)];
+  const slides = [`<div class="pr-slide"><p class="pr-count">${esc(c.school)} ${esc(c.grade)} ${esc(c.name)}</p>
+      <h2>${N}회차 수업 · 10분 리마인드</h2>
+      <p>오늘 복습할 내용: ${prev.map(s => `${s.no}회차 (지문 ${(s.passages || []).length}개)`).join(', ')}</p>
+      <p class="muted">→ 키 또는 다음 버튼으로 넘겨요.</p></div>`];
+  for (const s of prev) slides.push(`<div class="pr-slide">${remindSession(s, N, true)}</div>`);
+  if (saved) slides.push(`<div class="pr-slide"><h2>정리 · 확인 질문</h2><pre style="white-space:pre-wrap;font-family:var(--f-body);margin:0">${esc(saved.text)}</pre></div>`);
+  S.present = { i: 0, slides, left: 600, running: false };
+  $('#present').hidden = false; drawPresent();
+}
+function drawPresent() {
+  const P = S.present; if (!P) return;
+  $('#present').innerHTML = `<div class="pr-bar">
+      <button class="btn" data-act="pr-close">닫기</button>
+      <span class="timer ${P.left < 0 ? 'over' : ''}" id="pr-timer">${fmt(P.left)}</span>
+      <button class="btn" data-act="pr-timer">${P.running ? '일시정지' : P.left === 600 ? '10분 타이머 시작' : '계속'}</button>
+      <span class="spacer"></span><span class="pr-count">${P.i + 1} / ${P.slides.length}</span>
+      <button class="btn" data-act="pr-prev" ${P.i === 0 ? 'disabled' : ''} aria-label="이전">←</button>
+      <button class="btn primary" data-act="pr-next" ${P.i === P.slides.length - 1 ? 'disabled' : ''} aria-label="다음">→</button>
+    </div><div class="pr-body">${P.slides[P.i]}</div>`;
+}
+function fmt(s) { const a = Math.abs(s); return (s < 0 ? '+' : '') + String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); }
+function toggleTimer() {
+  const P = S.present; P.running = !P.running;
+  if (P.running) timerId = setInterval(() => { P.left--; const t = $('#pr-timer'); if (t) { t.textContent = fmt(P.left); t.classList.toggle('over', P.left < 0); } }, 1000);
+  else clearInterval(timerId);
+  drawPresent();
+}
+function closePresent() { clearInterval(timerId); S.present = null; $('#present').hidden = true; $('#present').innerHTML = ''; }
+
+/* ---------- UI helpers ---------- */
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3200); }
+function ask(msg, yesLabel, onYes) {
+  const c = $('#confirm'); c.hidden = false;
+  c.innerHTML = `<div class="confirm"><div class="card stack"><p style="margin:0">${esc(msg)}</p>
+    <div class="row"><button class="btn danger" id="cf-yes">${esc(yesLabel)}</button><button class="btn" id="cf-no">취소</button></div></div></div>`;
+  $('#cf-no').onclick = () => { c.hidden = true; };
+  $('#cf-yes').onclick = () => { c.hidden = true; onYes(); };
+  $('#cf-no').focus();
+}
+const blankPassage = () => ({ id: rid(), title: '', raw: '', gist: '', points: '', vocab: '', structure: '' });
+
+/* ---------- events ---------- */
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.f && S.editing) S.editing.data.passages[+t.dataset.i][t.dataset.f] = t.value;
+  else if (t.dataset.sf && S.editing) S.editing.data[t.dataset.sf] = t.value;
+  else if (t.dataset.cf && S.classForm) S.classForm[t.dataset.cf] = t.value;
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'remind-n') { S.remindN = +e.target.value; S.aiText = ''; render(); }
+});
+document.addEventListener('keydown', e => {
+  if (!S.present) return;
+  if (e.key === 'ArrowRight' && S.present.i < S.present.slides.length - 1) { S.present.i++; drawPresent(); }
+  else if (e.key === 'ArrowLeft' && S.present.i > 0) { S.present.i--; drawPresent(); }
+  else if (e.key === 'Escape') closePresent();
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id, i = +b.dataset.i;
+  const db = S.db;
+  switch (act) {
+    case 'side': S.sideOpen = !S.sideOpen; renderSide(); break;
+    case 'sel': S.sideOpen = false; S.classForm = null; selectClass(id); break;
+    case 'view': S.view = b.dataset.v; store.set('remind.view', S.view); render(); break;
+    case 'cls-new': S.sideOpen = false; S.classForm = { school: cls()?.school || '', grade: cls()?.grade || '', name: '' }; render(); $('#cf-name')?.focus(); break;
+    case 'cls-edit': { const c = cls(); S.classForm = { id: c.id, school: c.school, grade: c.grade, name: c.name }; render(); break; }
+    case 'cls-cancel': S.classForm = null; render(); break;
+    case 'cls-save': {
+      const f = S.classForm, data = { school: f.school.trim(), grade: f.grade.trim(), name: f.name.trim() };
+      if (!data.school || !data.grade || !data.name) return toast('학교, 학년, 반을 모두 적어 주세요.');
+      if (f.id) { if (await write(() => db.doc(`classes/${f.id}`).update(data), '반 정보를 고쳤어요.')) { S.classForm = null; render(); } }
+      else {
+        const ref = db.collection('classes').doc();
+        if (await write(() => ref.set({ ...data, createdAt: new Date().toISOString() }), `${data.name}을 만들었어요.`)) { S.classForm = null; S.view = 'log'; selectClass(ref.id); }
+      }
+      break;
+    }
+    case 'cls-del': {
+      const c = cls();
+      ask(`${c.school} ${c.grade} ${c.name}과 이 반의 회차 기록 ${S.sessions.length}개를 모두 지울까요? 되돌릴 수 없어요.`, '모두 삭제', async () => {
+        const ok = await write(async () => {
+          const snap = await db.collection(`classes/${c.id}/sessions`).get();
+          for (const d of snap.docs) await db.doc(`classes/${c.id}/sessions/${d.id}`).delete();
+          await db.doc(`classes/${c.id}`).delete();
+        }, '반을 삭제했어요.');
+        if (ok) { S.classForm = null; selectClass(null); }
+      });
+      break;
+    }
+    case 'sess-new': S.editing = { data: { no: maxNo() + 1, date: today(), passages: [blankPassage()] } }; S.copying = null; render(); break;
+    case 'sess-edit': {
+      const s = S.sessions.find(x => x.id === id);
+      S.editing = { id, data: { no: s.no, date: s.date || '', passages: (s.passages || []).map(p => ({ ...blankPassage(), ...p })) } };
+      if (!S.editing.data.passages.length) S.editing.data.passages.push(blankPassage());
+      render(); break;
+    }
+    case 'sess-cancel': S.editing = null; render(); break;
+    case 'p-add': S.editing.data.passages.push(blankPassage()); render(); break;
+    case 'p-del': S.editing.data.passages.splice(i, 1); if (!S.editing.data.passages.length) S.editing.data.passages.push(blankPassage()); render(); break;
+    case 'p-ai': aiFill(i); break;
+    case 'sess-save': {
+      const ed = S.editing, d = ed.data;
+      const passages = d.passages.map(({ _busy, ...p }) => p).filter(p => ['title', 'raw', 'gist', 'points', 'vocab', 'structure'].some(k => String(p[k] || '').trim()));
+      if (!passages.length) return toast('지문을 하나 이상 적어 주세요.');
+      const body = { no: d.no, date: d.date, passages, updatedAt: new Date().toISOString() };
+      const path = `classes/${S.cid}/sessions`;
+      const ok = await write(() => ed.id ? db.doc(`${path}/${ed.id}`).set(body) : db.collection(path).doc().set(body), `${d.no}회차를 저장했어요.`);
+      if (ok) { S.editing = null; render(); }
+      break;
+    }
+    case 'sess-del': {
+      const ed = S.editing;
+      ask(`${ed.data.no}회차 기록을 지울까요? 되돌릴 수 없어요.`, '삭제', async () => {
+        if (await write(() => db.doc(`classes/${S.cid}/sessions/${ed.id}`).delete(), '회차를 삭제했어요.')) { S.editing = null; render(); }
+      });
+      break;
+    }
+    case 'copy-open': S.copying = id; render(); break;
+    case 'copy-cancel': S.copying = null; render(); break;
+    case 'copy-do': {
+      const s = S.sessions.find(x => x.id === id), to = $('#copy-to').value, k = S.classes.find(c => c.id === to);
+      const ok = await write(async () => {
+        const snap = await db.collection(`classes/${to}/sessions`).get();
+        const no = snap.docs.reduce((m, d) => Math.max(m, d.data().no || 0), 0) + 1;
+        await db.collection(`classes/${to}/sessions`).doc().set({ no, date: s.date, passages: s.passages, updatedAt: new Date().toISOString() });
+      }, `${k.name}에 복사했어요.`);
+      if (ok) { S.copying = null; render(); }
+      break;
+    }
+    case 'ai-remind': aiRemind(); break;
+    case 'ai-stop': aiCtl?.abort(); break;
+    case 'present': openPresent(); break;
+    case 'pr-close': closePresent(); break;
+    case 'pr-next': S.present.i++; drawPresent(); break;
+    case 'pr-prev': S.present.i--; drawPresent(); break;
+    case 'pr-timer': toggleTimer(); break;
+  }
+});
+
+/* ---------- start ---------- */
+render();
+(async () => {
+  const [db, user, sample] = await Promise.all([use('db'), use('user'), use('sample')]);
+  S.sample = sample;
+  if (!db) { S.noDb = true; return render(); }
+  S.db = db;
+  if (user) { try { if (await user.can('data.write') === false) S.readOnly = true; } catch (e) {} }
+  db.collection('classes').onSnapshot(snap => {
+    S.classes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const first = !S.ready; S.ready = true;
+    if (!S.cid || !S.classes.find(c => c.id === S.cid)) {
+      const sorted = [...S.classes].sort((a, b) => ko(a.school + a.grade + a.name, b.school + b.grade + b.name));
+      selectClass(sorted[0]?.id || null);
+    } else if (first) selectClass(S.cid);
+    else render();
+  }, () => toast('반 목록을 불러오지 못했어요. 새로고침해 주세요.'));
+})();
+</script>
