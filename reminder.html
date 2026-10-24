@@ -119,6 +119,19 @@ mark.kw{background:none;color:var(--accent);font-weight:700}
 .flow-mini{font-size:13px;color:var(--muted);margin-top:4px}
 .flow-mini b{color:var(--accent);font-weight:700}
 .pe-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.vocab{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-size:14px}
+.vrow{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.vw{font-weight:700}
+.vm{color:var(--muted)}
+.rel b{color:var(--accent);margin-right:2px}
+.blank sup{font-size:.62em;margin-right:3px;opacity:.75}
+.blank.hint .f{font-family:var(--f-body);font-size:1.15em;font-weight:700}
+.vt{display:flex;flex-direction:column;gap:6px}
+.vt-label{font-size:13px;font-weight:700}
+.vt-row{display:grid;grid-template-columns:1.1fr 1.1fr 1.4fr 1.2fr auto;gap:6px;align-items:center}
+.vt-head{font-size:12px;color:var(--muted)}
+@media (max-width:600px){.vt-row{grid-template-columns:1fr 1fr auto}.vt-row input:nth-child(3),.vt-row input:nth-child(4){grid-column:span 1}.vt-head{display:none}}
+.pr-slide .vocab{font-size:.9em}
 .pr-slide .flow .step{font-size:.7em}
 
 /* presentation */
@@ -174,10 +187,491 @@ const S = {
   classForm: null,   // {id?, school, grade, name}
   editing: null,     // {id?, data:{no,date,passages}}
   copying: null, remindN: null, aiBusy: false, aiText: '', sideOpen: false,
-  present: null, downloads: null, timerMin: +store.get('remind.min') || 10,
-  blankLevel: store.get('remind.level') === 'vocab' ? 'vocab' : 'key'
+  present: null, downloads: null, timerMin: +store.get('remind.min') || 10
 };
 let unsubSess = null;
+
+/* Built-in synonym/antonym dictionary, shared with the vocab worksheet maker (index.html): word: [meaning, synonyms, antonyms] */
+const SYN_DICT = {
+  abandon:['버리다, 포기하다',['desert','forsake','relinquish'],['keep','retain']],
+  ability:['능력',['skill','capability','competence'],['inability']],
+  abundant:['풍부한',['plentiful','ample','copious'],['scarce','sparse']],
+  accurate:['정확한',['precise','exact','correct'],['inaccurate','imprecise']],
+  achieve:['성취하다, 달성하다',['accomplish','attain','fulfill'],['fail']],
+  acquire:['얻다, 획득하다',['obtain','gain','procure'],['lose']],
+  adequate:['충분한, 적절한',['sufficient','ample','satisfactory'],['inadequate','insufficient']],
+  admire:['존경하다, 감탄하다',['respect','esteem','appreciate'],['despise','disdain']],
+  adopt:['채택하다, 입양하다',['embrace','accept'],['reject','abandon']],
+  advantage:['이점, 장점',['benefit','edge'],['disadvantage']],
+  adversity:['역경',['hardship','misfortune','difficulty'],['prosperity']],
+  aggressive:['공격적인',['hostile','combative','forceful'],['passive','peaceful']],
+  ambiguous:['애매한, 모호한',['vague','unclear','equivocal'],['clear','unambiguous']],
+  ancient:['고대의',['old','antique','archaic'],['modern','contemporary']],
+  anxious:['불안한, 걱정하는',['worried','uneasy','nervous'],['calm','relaxed']],
+  apparent:['명백한',['obvious','evident','clear'],['unclear','hidden']],
+  appropriate:['적절한',['suitable','fitting','proper'],['inappropriate','unsuitable']],
+  approximate:['대략의',['rough','estimated'],['exact','precise']],
+  arrogant:['거만한',['conceited','haughty','proud'],['humble','modest']],
+  artificial:['인공적인',['synthetic','fake'],['natural','genuine']],
+  assist:['돕다',['help','aid','support'],['hinder','obstruct']],
+  authentic:['진짜의, 진품의',['genuine','real','legitimate'],['fake','counterfeit']],
+  available:['이용 가능한',['accessible','obtainable'],['unavailable']],
+  average:['평균의, 보통의',['ordinary','typical','mediocre'],['exceptional','extraordinary']],
+  avoid:['피하다',['evade','dodge','shun'],['confront','face']],
+  aware:['알고 있는, 인식하는',['conscious','mindful','informed'],['unaware','ignorant']],
+  benefit:['이익, 혜택',['advantage','gain','profit'],['drawback','loss']],
+  brave:['용감한',['courageous','bold','valiant'],['cowardly','timid']],
+  brief:['짧은, 간단한',['short','concise'],['lengthy','long']],
+  brilliant:['뛰어난, 빛나는',['bright','radiant','ingenious'],['dull','unremarkable']],
+  calm:['차분한, 고요한',['peaceful','tranquil','serene'],['anxious','agitated']],
+  capable:['유능한',['competent','skilled','able'],['incapable','inept']],
+  careless:['부주의한',['negligent','reckless','sloppy'],['careful','meticulous']],
+  cautious:['신중한, 조심스러운',['careful','wary','prudent'],['reckless','careless']],
+  cease:['멈추다, 중단하다',['stop','halt'],['begin','continue']],
+  chaotic:['혼란스러운',['disordered','turbulent','confused'],['orderly','organized']],
+  cheerful:['명랑한, 쾌활한',['happy','joyful','upbeat'],['gloomy','sad']],
+  clarify:['명확히 하다, 설명하다',['explain','elucidate'],['confuse','obscure']],
+  clumsy:['서투른',['awkward','ungainly'],['graceful','agile']],
+  collapse:['무너지다, 붕괴하다',['fall','crumble','topple'],['rise','stand']],
+  combine:['결합하다',['merge','unite','blend'],['separate','divide']],
+  comfortable:['편안한',['cozy','snug','relaxed'],['uncomfortable']],
+  common:['흔한, 공통의',['ordinary','usual','widespread'],['rare','uncommon']],
+  compassion:['연민, 동정심',['sympathy','empathy','kindness'],['cruelty','indifference']],
+  competent:['유능한',['capable','skilled','proficient'],['incompetent']],
+  complex:['복잡한',['complicated','intricate'],['simple']],
+  conceal:['숨기다',['hide','disguise','cover'],['reveal','expose']],
+  concise:['간결한',['brief','succinct','terse'],['lengthy','verbose']],
+  confident:['자신감 있는',['assured','certain'],['insecure','doubtful']],
+  confuse:['혼란시키다',['bewilder','puzzle','perplex'],['clarify','enlighten']],
+  consequence:['결과',['result','outcome','effect'],['cause']],
+  considerable:['상당한',['significant','substantial'],['negligible','insignificant']],
+  constant:['끊임없는, 지속적인',['continuous','unchanging','steady'],['variable','inconsistent']],
+  contradict:['반박하다, 모순되다',['dispute','deny','oppose'],['confirm','agree']],
+  convenient:['편리한',['handy','useful','practical'],['inconvenient']],
+  cooperate:['협력하다',['collaborate','unite'],['compete','oppose']],
+  courageous:['용감한',['brave','bold','fearless'],['cowardly']],
+  crucial:['결정적인, 매우 중요한',['critical','vital','essential'],['trivial','unimportant']],
+  curious:['호기심 많은',['inquisitive','interested'],['indifferent','uninterested']],
+  damage:['손상',['harm','injure','ruin'],['repair','restore']],
+  dangerous:['위험한',['hazardous','risky','perilous'],['safe']],
+  decline:['감소하다, 거절하다',['decrease','drop','diminish'],['increase','rise']],
+  decrease:['감소하다',['reduce','diminish','lessen'],['increase']],
+  defend:['방어하다',['protect','guard','shield'],['attack']],
+  definite:['명확한, 확실한',['certain','sure','clear'],['uncertain','vague']],
+  delicate:['섬세한, 연약한',['fragile','sensitive'],['sturdy','tough']],
+  demolish:['철거하다, 파괴하다',['destroy','raze','wreck'],['build','construct']],
+  dense:['밀집한, 빽빽한',['thick','compact','packed'],['sparse']],
+  deny:['부인하다, 거부하다',['refuse','reject','disclaim'],['admit','confirm']],
+  depend:['의존하다',['rely','trust'],[]],
+  deserve:['~할 자격이 있다',['merit','earn','warrant'],[]],
+  desperate:['절망적인, 필사적인',['hopeless','frantic'],['hopeful']],
+  destroy:['파괴하다',['demolish','ruin','wreck'],['create','build']],
+  determine:['결정하다',['decide','establish','ascertain'],[]],
+  diligent:['부지런한, 근면한',['hardworking','industrious'],['lazy']],
+  diminish:['줄어들다, 감소시키다',['decrease','reduce','shrink'],['increase','grow']],
+  disaster:['재난, 재해',['catastrophe','calamity'],[]],
+  discourage:['낙담시키다',['dishearten','deter'],['encourage']],
+  disguise:['위장하다, 변장하다',['mask','conceal','camouflage'],['reveal']],
+  dismiss:['해고하다, 묵살하다',['reject','disregard'],['accept']],
+  distinct:['뚜렷한, 별개의',['separate','different','clear'],['identical','similar']],
+  distribute:['분배하다',['allocate','disperse','dispense'],['collect','gather']],
+  diverse:['다양한',['varied','assorted','different'],['uniform','similar']],
+  domestic:['국내의, 가정의',['household','native'],['foreign','international']],
+  doubt:['의심',['uncertainty','skepticism'],['confidence','certainty']],
+  durable:['내구성 있는',['sturdy','tough'],['fragile','flimsy']],
+  eager:['열망하는, 간절히 바라는',['enthusiastic','keen','avid'],['reluctant','indifferent']],
+  effective:['효과적인',['efficient','successful','productive'],['ineffective']],
+  efficient:['효율적인',['effective','productive','competent'],['inefficient']],
+  elaborate:['정교한, 상세한',['detailed','intricate','complex'],['simple','plain']],
+  eliminate:['제거하다',['remove','eradicate','abolish'],['add','include']],
+  emerge:['나타나다, 드러나다',['appear','arise','surface'],['disappear']],
+  emphasize:['강조하다',['stress','highlight'],['downplay','minimize']],
+  enable:['가능하게 하다',['allow','permit','facilitate'],['prevent','hinder']],
+  encourage:['격려하다, 장려하다',['motivate','inspire','support'],['discourage']],
+  enormous:['거대한',['huge','immense','gigantic'],['tiny','minuscule']],
+  enthusiastic:['열정적인',['eager','passionate','keen'],['apathetic','indifferent']],
+  equivalent:['동등한',['equal','identical','comparable'],['different']],
+  essential:['필수적인',['crucial','vital','necessary'],['unnecessary','trivial']],
+  establish:['설립하다, 확립하다',['found','institute','create'],['dissolve','abolish']],
+  eventually:['결국, 마침내',['finally','ultimately'],['immediately']],
+  evident:['명백한',['obvious','apparent','clear'],['unclear','hidden']],
+  exaggerate:['과장하다',['overstate','embellish'],['understate','minimize']],
+  excessive:['과도한',['extreme','immoderate','extravagant'],['moderate','reasonable']],
+  exhaust:['지치게 하다, 고갈시키다',['tire','drain','deplete'],['refresh','energize']],
+  expand:['확장하다',['enlarge','extend','grow'],['shrink','contract']],
+  expensive:['비싼',['costly','pricey'],['cheap','inexpensive']],
+  extinct:['멸종된',['dead','vanished'],['existing','living']],
+  extraordinary:['비범한, 놀라운',['remarkable','exceptional','unusual'],['ordinary','common']],
+  fade:['희미해지다, 사라지다',['dim','vanish','wane'],['brighten','intensify']],
+  fair:['공정한',['just','impartial','equitable'],['unfair','biased']],
+  familiar:['익숙한, 친숙한',['known','recognizable'],['unfamiliar','strange']],
+  fascinate:['매혹시키다',['captivate','enthrall','intrigue'],['bore']],
+  fatigue:['피로',['exhaustion','tiredness','weariness'],['energy','vigor']],
+  feasible:['실현 가능한',['possible','achievable','viable'],['impossible','unfeasible']],
+  ferocious:['사나운, 흉포한',['fierce','savage','brutal'],['gentle','mild']],
+  flexible:['유연한',['adaptable','versatile','pliable'],['rigid','inflexible']],
+  fluent:['유창한',['articulate','eloquent'],['inarticulate']],
+  fragile:['부서지기 쉬운, 연약한',['delicate','brittle','breakable'],['sturdy','durable']],
+  frequent:['빈번한',['common','recurring','regular'],['rare','infrequent']],
+  frustrate:['좌절시키다',['discourage','thwart','hinder'],['satisfy','encourage']],
+  generous:['관대한, 너그러운',['charitable','giving','unselfish'],['stingy','selfish']],
+  genuine:['진짜의, 진실한',['authentic','real','sincere'],['fake','artificial']],
+  gigantic:['거대한',['huge','enormous','massive'],['tiny','minuscule']],
+  gloomy:['우울한, 어두운',['dark','dismal','depressing'],['cheerful','bright']],
+  gradual:['점진적인',['slow','steady','progressive'],['sudden','abrupt']],
+  grateful:['감사하는',['thankful','appreciative'],['ungrateful']],
+  guarantee:['보장하다',['ensure','assure','promise'],[]],
+  hardship:['고난, 어려움',['difficulty','adversity','suffering'],['comfort','ease']],
+  harsh:['가혹한, 혹독한',['severe','cruel','rough'],['gentle','mild']],
+  hesitate:['망설이다',['pause','waver','falter'],[]],
+  hostile:['적대적인',['aggressive','unfriendly','antagonistic'],['friendly','amicable']],
+  huge:['거대한',['enormous','massive','gigantic'],['tiny','small']],
+  humble:['겸손한',['modest','unassuming'],['arrogant','proud']],
+  identical:['동일한',['same','alike','matching'],['different']],
+  ignore:['무시하다',['disregard','overlook','neglect'],['notice','acknowledge']],
+  imaginary:['상상의, 가상의',['fictional','fanciful','unreal'],['real','actual']],
+  immense:['거대한, 막대한',['huge','vast','enormous'],['tiny','minuscule']],
+  imply:['암시하다',['suggest','hint','indicate'],['state','declare']],
+  inevitable:['불가피한',['unavoidable','certain'],['avoidable']],
+  influence:['영향',['affect','impact','sway'],[]],
+  initial:['처음의, 초기의',['first','original','primary'],['final','last']],
+  innocent:['무죄인, 순진한',['guiltless','blameless'],['guilty']],
+  inquire:['문의하다',['ask','question','investigate'],[]],
+  insist:['주장하다, 고집하다',['demand','urge','persist'],[]],
+  inspire:['영감을 주다',['motivate','encourage','stimulate'],['discourage']],
+  intense:['강렬한',['extreme','severe','powerful'],['mild','moderate']],
+  interfere:['간섭하다, 방해하다',['meddle','intervene','disrupt'],[]],
+  intricate:['복잡한',['complex','complicated','elaborate'],['simple']],
+  invaluable:['매우 귀중한',['priceless','precious'],['worthless']],
+  isolate:['고립시키다',['separate','seclude','segregate'],['connect','unite']],
+  jealous:['질투하는',['envious','resentful'],[]],
+  justify:['정당화하다',['defend','validate','explain'],['condemn']],
+  kind:['친절한',['gentle','considerate','compassionate'],['cruel','unkind']],
+  lack:['부족',['shortage','deficiency','absence'],['abundance','surplus']],
+  legitimate:['합법적인, 정당한',['legal','valid','lawful'],['illegitimate','unlawful']],
+  lenient:['관대한',['merciful','tolerant','forgiving'],['strict','harsh']],
+  lethal:['치명적인',['deadly','fatal'],['harmless']],
+  lively:['활기찬',['energetic','vibrant','animated'],['dull','lifeless']],
+  logical:['논리적인',['rational','reasonable','sound'],['illogical','irrational']],
+  lonely:['외로운',['solitary','isolated'],['accompanied']],
+  maintain:['유지하다',['preserve','sustain'],['neglect','abandon']],
+  massive:['거대한',['huge','enormous','immense'],['tiny','small']],
+  mature:['성숙한',['adult','grown','developed'],['immature']],
+  maximum:['최대의',['highest','greatest','peak'],['minimum']],
+  minor:['사소한, 작은',['small','insignificant','slight'],['major','significant']],
+  minimum:['최소의',['least','smallest'],['maximum']],
+  miserable:['비참한',['unhappy','wretched','gloomy'],['happy','content']],
+  modest:['겸손한',['humble','unassuming'],['arrogant','boastful']],
+  modify:['수정하다',['alter','adjust','change'],['preserve']],
+  monotonous:['단조로운',['boring','tedious','dull'],['exciting','interesting']],
+  mysterious:['신비로운',['puzzling','enigmatic','strange'],['obvious','clear']],
+  naive:['순진한',['innocent','gullible','unsophisticated'],['sophisticated','worldly']],
+  negative:['부정적인',['unfavorable','pessimistic'],['positive']],
+  neglect:['방치하다, 소홀히 하다',['ignore','disregard','overlook'],['care','attend']],
+  notorious:['악명 높은',['infamous','disreputable'],['respected']],
+  numerous:['수많은',['many','countless','abundant'],['few']],
+  obscure:['애매한, 잘 알려지지 않은',['unclear','vague','hidden'],['clear','obvious']],
+  obstacle:['장애물',['barrier','hindrance','obstruction'],['aid','help']],
+  obtain:['얻다',['acquire','gain','procure'],['lose']],
+  obvious:['명백한',['clear','evident','apparent'],['unclear','obscure']],
+  occasional:['가끔의',['infrequent','sporadic','rare'],['frequent','regular']],
+  optimistic:['낙관적인',['hopeful','positive'],['pessimistic']],
+  ordinary:['평범한',['common','usual','typical'],['extraordinary','unusual']],
+  origin:['기원, 근원',['source','beginning','root'],['end']],
+  outstanding:['뛰어난',['remarkable','exceptional','excellent'],['ordinary','mediocre']],
+  overcome:['극복하다',['conquer','defeat','surmount'],['surrender','yield']],
+  passive:['수동적인',['inactive','submissive'],['active','aggressive']],
+  peculiar:['특이한, 이상한',['strange','odd','unusual'],['normal','ordinary']],
+  permanent:['영구적인',['lasting','enduring','everlasting'],['temporary']],
+  persuade:['설득하다',['convince','influence','urge'],['dissuade']],
+  plentiful:['풍부한',['abundant','ample','copious'],['scarce']],
+  positive:['긍정적인',['optimistic','favorable'],['negative']],
+  practical:['실용적인',['realistic','sensible','pragmatic'],['impractical','theoretical']],
+  precious:['소중한, 귀중한',['valuable','priceless','treasured'],['worthless']],
+  precise:['정확한',['exact','accurate','specific'],['imprecise','vague']],
+  predict:['예측하다',['forecast','anticipate','foresee'],[]],
+  prevent:['막다, 예방하다',['stop','hinder','avert'],['allow','permit']],
+  primitive:['원시적인',['basic','ancient','undeveloped'],['advanced','modern']],
+  profound:['깊은, 심오한',['deep','intense','significant'],['superficial','shallow']],
+  prohibit:['금지하다',['forbid','ban','outlaw'],['permit','allow']],
+  prominent:['저명한, 두드러진',['notable','distinguished','famous'],['obscure','unknown']],
+  prosper:['번영하다',['thrive','flourish','succeed'],['fail','decline']],
+  provoke:['자극하다, 유발하다',['incite','trigger','instigate'],['calm','soothe']],
+  punctual:['시간을 잘 지키는',['prompt','timely'],['late','tardy']],
+  pursue:['추구하다',['chase','follow','seek'],['avoid','abandon']],
+  random:['무작위의',['arbitrary','unplanned'],['deliberate','planned']],
+  rapid:['빠른, 신속한',['fast','swift','quick'],['slow']],
+  rare:['드문, 희귀한',['scarce','uncommon','unusual'],['common','abundant']],
+  reasonable:['합리적인',['sensible','rational','fair'],['unreasonable','irrational']],
+  reckless:['무모한',['careless','rash','hasty'],['cautious','careful']],
+  reduce:['줄이다',['decrease','diminish','lessen'],['increase']],
+  reject:['거절하다',['refuse','decline','dismiss'],['accept']],
+  reliable:['믿을 수 있는',['dependable','trustworthy'],['unreliable']],
+  reluctant:['꺼리는, 마지못한',['unwilling','hesitant'],['willing','eager']],
+  remarkable:['놀라운, 주목할 만한',['extraordinary','notable','impressive'],['ordinary','unremarkable']],
+  reveal:['드러내다, 밝히다',['disclose','expose','unveil'],['conceal','hide']],
+  rigid:['엄격한, 뻣뻣한',['stiff','inflexible','strict'],['flexible']],
+  rural:['시골의',['countryside','agricultural'],['urban']],
+  scarce:['부족한, 희귀한',['rare','limited','insufficient'],['abundant','plentiful']],
+  severe:['심각한, 가혹한',['harsh','extreme','strict'],['mild','lenient']],
+  significant:['중요한, 상당한',['important','notable','considerable'],['insignificant','trivial']],
+  sincere:['진실된',['genuine','honest','heartfelt'],['insincere','fake']],
+  skeptical:['회의적인',['doubtful','dubious'],['convinced','certain']],
+  sophisticated:['세련된, 정교한',['advanced','refined','complex'],['simple','unsophisticated']],
+  spontaneous:['자발적인',['impulsive','unplanned'],['planned','deliberate']],
+  stable:['안정적인',['steady','secure','firm'],['unstable']],
+  strict:['엄격한',['rigid','stern','harsh'],['lenient']],
+  subsequent:['그 다음의, 후속의',['following','later'],['previous','prior']],
+  substantial:['상당한, 실질적인',['significant','considerable'],['insignificant','minor']],
+  subtle:['미묘한',['delicate','faint','nuanced'],['obvious','blatant']],
+  sufficient:['충분한',['adequate','enough','ample'],['insufficient']],
+  superficial:['피상적인',['shallow','cursory'],['profound','deep']],
+  suppress:['억압하다, 억누르다',['restrain','stifle','quell'],['release','express']],
+  temporary:['일시적인',['brief','transient'],['permanent']],
+  tense:['긴장한',['strained','anxious','taut'],['relaxed','calm']],
+  thorough:['철저한',['complete','exhaustive','meticulous'],['careless','incomplete']],
+  tolerate:['참다, 견디다',['endure','bear','withstand'],['reject','refuse']],
+  tragic:['비극적인',['disastrous','catastrophic','sad'],['fortunate','happy']],
+  transparent:['투명한',['clear','obvious'],['opaque']],
+  trivial:['사소한',['minor','insignificant','unimportant'],['significant','important']],
+  typical:['전형적인',['usual','common','characteristic'],['atypical','unusual']],
+  unanimous:['만장일치의',['united','agreed'],['divided']],
+  unique:['독특한',['distinctive','singular'],['common','ordinary']],
+  urban:['도시의',['metropolitan','city'],['rural']],
+  urgent:['긴급한',['pressing','critical','immediate'],[]],
+  vague:['모호한',['unclear','ambiguous','obscure'],['clear','precise']],
+  valid:['유효한, 타당한',['legitimate','sound','reasonable'],['invalid']],
+  vast:['광대한, 방대한',['huge','immense','enormous'],['tiny','small']],
+  versatile:['다재다능한',['adaptable','flexible','resourceful'],[]],
+  vivid:['생생한',['bright','vibrant','intense'],['dull','faded']],
+  voluntary:['자발적인',['optional','willing'],['mandatory','compulsory']],
+  vulnerable:['취약한',['exposed','defenseless','susceptible'],['protected','secure']],
+  wealthy:['부유한',['rich','affluent','prosperous'],['poor']],
+  widespread:['널리 퍼진',['common','prevalent','extensive'],['rare','limited']],
+  withstand:['견디다, 버티다',['endure','resist','survive'],['succumb']],
+  important:['중요한',['significant','crucial','essential'],['unimportant','trivial']],
+  interesting:['흥미로운',['fascinating','engaging','intriguing'],['boring','dull']],
+  boring:['지루한',['dull','tedious','monotonous'],['interesting','exciting']],
+  difficult:['어려운',['hard','challenging','tough'],['easy','simple']],
+  easy:['쉬운',['simple','effortless','straightforward'],['difficult','hard']],
+  necessary:['필요한',['essential','required','vital'],['unnecessary','optional']],
+  unnecessary:['불필요한',['needless','optional'],['necessary','essential']],
+  possible:['가능한',['feasible','achievable','likely'],['impossible']],
+  impossible:['불가능한',['unachievable','unfeasible'],['possible']],
+  successful:['성공적인',['victorious','prosperous','thriving'],['unsuccessful','failed']],
+  unsuccessful:['성공하지 못한',['failed','unproductive'],['successful']],
+  popular:['인기 있는',['well-liked','favored'],['unpopular']],
+  unpopular:['인기 없는',['disliked','unfavored'],['popular']],
+  different:['다른',['distinct','dissimilar','unlike'],['similar','identical']],
+  similar:['비슷한',['alike','comparable','resembling'],['different','distinct']],
+  useful:['유용한',['helpful','beneficial','practical'],['useless']],
+  useless:['쓸모없는',['worthless','ineffective'],['useful']],
+  powerful:['강력한',['strong','mighty','potent'],['weak','powerless']],
+  weak:['약한',['feeble','frail','fragile'],['strong','powerful']],
+  strong:['강한',['powerful','sturdy','robust'],['weak','frail']],
+  healthy:['건강한',['fit','well','robust'],['unhealthy','sick']],
+  unhealthy:['건강하지 않은',['sick','ill','unfit'],['healthy']],
+  wild:['야생의',['untamed','feral'],['tame','domesticated']],
+  tame:['길들여진',['docile','gentle','domesticated'],['wild','feral']],
+  beautiful:['아름다운',['gorgeous','lovely','attractive'],['ugly','unattractive']],
+  ugly:['못생긴, 추한',['unattractive','hideous'],['beautiful','attractive']],
+  clean:['깨끗한',['spotless','tidy','pure'],['dirty','filthy']],
+  dirty:['더러운',['filthy','grimy','soiled'],['clean','spotless']],
+  polite:['예의 바른',['courteous','respectful'],['rude','impolite']],
+  rude:['무례한',['impolite','disrespectful'],['polite','courteous']],
+  honest:['정직한',['truthful','sincere'],['dishonest','deceitful']],
+  dishonest:['부정직한',['deceitful','untruthful'],['honest','truthful']],
+  happy:['행복한',['glad','joyful','pleased'],['sad','unhappy']],
+  sad:['슬픈',['unhappy','sorrowful','gloomy'],['happy','joyful']],
+  angry:['화난',['furious','irritated','annoyed'],['calm','pleased']],
+  proud:['자랑스러운',['pleased','satisfied'],['ashamed','humble']],
+  ashamed:['부끄러운',['embarrassed','guilty'],['proud']],
+  afraid:['두려운',['scared','frightened','fearful'],['brave','fearless']],
+  lazy:['게으른',['idle','slothful','indolent'],['diligent','hardworking']],
+  active:['활동적인',['energetic','lively','dynamic'],['inactive','passive']],
+  inactive:['활동하지 않는',['idle','dormant','passive'],['active']],
+  rich:['부유한',['wealthy','affluent'],['poor']],
+  poor:['가난한',['impoverished','needy'],['rich','wealthy']],
+  famous:['유명한',['renowned','well-known','celebrated'],['unknown','obscure']],
+  unknown:['알려지지 않은',['unfamiliar','obscure'],['famous','well-known']],
+  quiet:['조용한',['silent','peaceful','calm'],['noisy','loud']],
+  noisy:['시끄러운',['loud','clamorous'],['quiet','silent']],
+  loud:['시끄러운, 큰 소리의',['noisy','booming'],['quiet','soft']],
+  fast:['빠른',['quick','rapid','swift'],['slow']],
+  slow:['느린',['sluggish','unhurried'],['fast','rapid']],
+  old:['나이 든, 오래된',['aged','ancient','elderly'],['young','new']],
+  young:['젊은, 어린',['youthful','juvenile'],['old','elderly']],
+  new:['새로운',['modern','recent','fresh'],['old','outdated']],
+  modern:['현대의',['contemporary','current','up-to-date'],['ancient','outdated']],
+  traditional:['전통적인',['conventional','customary'],['modern','unconventional']],
+  normal:['정상적인',['usual','typical','standard'],['abnormal','unusual']],
+  abnormal:['비정상적인',['unusual','irregular'],['normal','typical']],
+  special:['특별한',['unique','distinctive','exceptional'],['ordinary','common']],
+  global:['세계적인, 지구의',['worldwide','international'],['local','domestic']],
+  local:['지역의',['regional'],['global','national']],
+  public:['공공의, 대중의',['communal','open'],['private']],
+  private:['사적인',['personal','confidential'],['public']],
+  individual:['개인의',['personal','single'],['collective','shared']],
+  serious:['진지한, 심각한',['grave','solemn','earnest'],['playful','trivial']],
+  funny:['재미있는, 우스운',['amusing','humorous','comical'],['serious','solemn']],
+  simple:['단순한',['easy','plain','uncomplicated'],['complex','complicated']],
+  complicated:['복잡한',['complex','intricate'],['simple']],
+  uncomfortable:['불편한',['awkward','uneasy'],['comfortable']],
+  safe:['안전한',['secure','protected'],['dangerous','unsafe']],
+  unsafe:['위험한, 안전하지 않은',['dangerous','hazardous'],['safe','secure']],
+  clear:['명확한, 맑은',['obvious','transparent','evident'],['unclear','vague']],
+  unclear:['불분명한',['vague','ambiguous','confusing'],['clear']],
+  correct:['옳은, 정확한',['accurate','right','proper'],['incorrect','wrong']],
+  incorrect:['틀린',['wrong','inaccurate','mistaken'],['correct','right']],
+  true:['사실인, 진실한',['accurate','factual','genuine'],['false','untrue']],
+  false:['거짓의',['untrue','incorrect','fake'],['true','genuine']],
+  real:['진짜의',['genuine','actual','authentic'],['fake','imaginary']],
+  fake:['가짜의',['artificial','counterfeit','phony'],['real','genuine']],
+  large:['큰',['big','huge','sizable'],['small','tiny']],
+  small:['작은',['little','tiny','minor'],['large','big']],
+  big:['큰',['large','huge','massive'],['small','little']],
+  tall:['키가 큰, 높은',['high','lofty'],['short']],
+  short:['짧은, 키가 작은',['brief','low'],['tall','long']],
+  long:['긴',['lengthy','extended'],['short','brief']],
+  heavy:['무거운',['weighty','burdensome'],['light']],
+  light:['가벼운, 밝은',['lightweight','bright'],['heavy','dark']],
+  dark:['어두운',['dim','gloomy','shadowy'],['light','bright']],
+  bright:['밝은',['radiant','vivid','luminous'],['dark','dim']],
+  warm:['따뜻한',['mild','cozy'],['cold','cool']],
+  cold:['추운, 차가운',['chilly','frigid'],['warm','hot']],
+  hot:['더운, 뜨거운',['warm','scorching'],['cold','cool']],
+  wet:['젖은',['damp','moist','soaked'],['dry']],
+  dry:['마른, 건조한',['arid','parched'],['wet','damp']],
+  full:['가득 찬',['complete','filled'],['empty']],
+  empty:['빈',['vacant','hollow','bare'],['full']],
+  open:['열린',['unlocked','accessible'],['closed','shut']],
+  closed:['닫힌',['shut','sealed'],['open']],
+  deep:['깊은',['profound','bottomless'],['shallow']],
+  shallow:['얕은',['superficial'],['deep']],
+  wide:['넓은',['broad','extensive'],['narrow']],
+  narrow:['좁은',['thin','tight','limited'],['wide','broad']],
+  thick:['두꺼운',['dense','heavy'],['thin']],
+  thin:['얇은, 마른',['slim','slender','skinny'],['thick','fat']],
+  soft:['부드러운',['gentle','tender','mild'],['hard','firm']],
+  hard:['딱딱한, 어려운',['firm','solid','tough'],['soft','gentle']],
+  smooth:['매끄러운',['even','sleek'],['rough']],
+  rough:['거친',['coarse','harsh','uneven'],['smooth']],
+  sharp:['날카로운',['keen','pointed'],['dull','blunt']],
+  dull:['무딘, 지루한',['blunt','boring'],['sharp','interesting']],
+  create:['창조하다, 만들다',['produce','generate','make'],['destroy','eliminate']],
+  produce:['생산하다',['create','generate','manufacture'],['consume','destroy']],
+  consume:['소비하다',['use','utilize','ingest'],['produce','conserve']],
+  protect:['보호하다',['defend','guard','shield'],['attack','harm']],
+  attack:['공격하다',['assault','invade','strike'],['defend','protect']],
+  support:['지지하다, 지원하다',['assist','back','help'],['oppose','hinder']],
+  oppose:['반대하다',['resist','object','counter'],['support','favor']],
+  accept:['받아들이다',['agree','approve','receive'],['reject','refuse']],
+  refuse:['거절하다',['decline','reject','deny'],['accept','agree']],
+  allow:['허락하다',['permit','let','authorize'],['forbid','prohibit']],
+  permit:['허락하다',['allow','authorize','approve'],['forbid','ban']],
+  forbid:['금지하다',['prohibit','ban','disallow'],['allow','permit']],
+  increase:['증가하다',['rise','grow','expand'],['decrease','reduce']],
+  develop:['발전하다, 개발하다',['grow','evolve','advance'],['decline','regress']],
+  improve:['개선하다',['enhance','upgrade','better'],['worsen','deteriorate']],
+  worsen:['악화되다',['deteriorate','decline'],['improve']],
+  succeed:['성공하다',['accomplish','achieve','prosper'],['fail']],
+  fail:['실패하다',['flunk','falter'],['succeed','prevail']],
+  begin:['시작하다',['start','commence','initiate'],['end','finish']],
+  end:['끝나다, 끝',['finish','conclude','terminate'],['begin','start']],
+  continue:['계속하다',['proceed','persist'],['stop','cease']],
+  stop:['멈추다',['halt','cease','end'],['continue','proceed']],
+  gain:['얻다',['acquire','obtain','earn'],['lose']],
+  lose:['잃다',['misplace','forfeit'],['gain','find']],
+  win:['이기다',['triumph','prevail','succeed'],['lose']],
+  change:['변화시키다, 바꾸다',['alter','modify','transform'],['preserve','maintain']],
+  remain:['남다, 계속 ~이다',['stay','continue','persist'],['leave','depart']],
+  leave:['떠나다',['depart','exit','abandon'],['stay','arrive']],
+  arrive:['도착하다',['appear','reach','come'],['leave','depart']],
+  believe:['믿다',['trust','accept','assume'],['doubt','disbelieve']],
+  explain:['설명하다',['clarify','describe','illustrate'],['confuse']],
+  describe:['묘사하다, 설명하다',['explain','depict','portray'],[]],
+  understand:['이해하다',['comprehend','grasp','realize'],['misunderstand']],
+  misunderstand:['오해하다',['misinterpret','confuse'],['understand']],
+  remember:['기억하다',['recall','recollect'],['forget']],
+  forget:['잊다',['overlook','neglect'],['remember']],
+  solve:['해결하다',['resolve','fix','settle'],[]],
+  decide:['결정하다',['determine','resolve','choose'],['hesitate']],
+  choose:['선택하다',['select','pick','opt'],['reject']],
+  share:['공유하다, 나누다',['distribute','divide'],['keep','withhold']],
+  gather:['모으다',['collect','assemble','accumulate'],['disperse','scatter']],
+  scatter:['흩어지다, 흩뿌리다',['disperse','spread'],['gather','collect']],
+  build:['짓다, 건설하다',['construct','erect','assemble'],['demolish','destroy']],
+  cruel:['잔인한',['brutal','vicious','merciless'],['kind','gentle']],
+  gentle:['온화한, 부드러운',['mild','tender','soft'],['harsh','rough']],
+  timid:['소심한',['shy','fearful','meek'],['bold','confident']],
+  shy:['수줍은',['timid','bashful'],['outgoing','confident']],
+  outgoing:['외향적인',['sociable','friendly'],['shy','reserved']],
+  friendly:['친절한, 다정한',['amiable','warm','kind'],['unfriendly','hostile']],
+  unfriendly:['불친절한',['hostile','cold'],['friendly','warm']],
+  pessimistic:['비관적인',['negative','gloomy'],['optimistic','hopeful']],
+  hopeful:['희망적인',['optimistic','confident'],['hopeless','pessimistic']],
+  hopeless:['절망적인',['desperate','despairing'],['hopeful','optimistic']],
+  patient:['참을성 있는',['tolerant','enduring'],['impatient']],
+  impatient:['참을성 없는',['restless','irritable'],['patient']],
+  careful:['조심스러운',['cautious','attentive','meticulous'],['careless','reckless']],
+  attentive:['주의 깊은',['observant','alert'],['inattentive','careless']],
+  alert:['기민한, 경계하는',['watchful','vigilant'],['careless','inattentive']],
+  vigilant:['경계하는',['watchful','alert'],['negligent']],
+  industrious:['근면한',['diligent','hardworking'],['lazy']],
+  hardworking:['근면한',['diligent','industrious'],['lazy']],
+  ambitious:['야심 있는',['aspiring','driven'],['unambitious','lazy']],
+  stingy:['인색한',['miserly','cheap'],['generous']],
+  selfish:['이기적인',['self-centered','egotistic'],['selfless','generous']],
+  selfless:['이타적인',['unselfish','generous'],['selfish']],
+  loyal:['충성스러운',['faithful','devoted'],['disloyal','unfaithful']],
+  disloyal:['불충한',['unfaithful','treacherous'],['loyal','faithful']],
+  faithful:['충실한',['loyal','devoted'],['unfaithful','disloyal']],
+  stubborn:['완고한',['obstinate','inflexible'],['flexible','adaptable']],
+  obstinate:['고집 센',['stubborn','inflexible'],['flexible']],
+  creative:['창의적인',['imaginative','inventive'],['unimaginative']],
+  imaginative:['상상력이 풍부한',['creative','inventive'],['unimaginative']],
+  inventive:['독창적인',['creative','imaginative'],['unoriginal']],
+  theoretical:['이론적인',['abstract','conceptual'],['practical']],
+  realistic:['현실적인',['practical','pragmatic'],['unrealistic']],
+  unrealistic:['비현실적인',['impractical','idealistic'],['realistic']],
+  unreliable:['믿을 수 없는',['undependable','untrustworthy'],['reliable']],
+  trustworthy:['신뢰할 수 있는',['reliable','dependable'],['untrustworthy']],
+  dependable:['믿을 수 있는',['reliable','trustworthy'],['unreliable']],
+  responsible:['책임감 있는',['accountable','dependable'],['irresponsible']],
+  irresponsible:['무책임한',['careless','reckless'],['responsible']],
+  thoughtful:['사려 깊은',['considerate','attentive'],['thoughtless']],
+  thoughtless:['배려 없는',['inconsiderate','careless'],['thoughtful']],
+  considerate:['배려하는',['thoughtful','caring'],['inconsiderate','selfish']],
+  inconsiderate:['배려 없는',['thoughtless','selfish'],['considerate']],
+  sustainable:['지속 가능한',['renewable','viable'],['unsustainable']],
+  renewable:['재생 가능한',['sustainable','replenishable'],['nonrenewable']],
+  productive:['생산적인',['efficient','fruitful'],['unproductive']],
+  unproductive:['비생산적인',['ineffective','fruitless'],['productive']],
+  innovative:['혁신적인',['inventive','groundbreaking'],['conventional','traditional']],
+  conventional:['관습적인',['traditional','standard'],['unconventional','innovative']],
+  unconventional:['파격적인',['unusual','nontraditional'],['conventional','traditional']],
+  analyze:['분석하다',['examine','evaluate'],[]],
+  examine:['조사하다, 검토하다',['inspect','investigate','analyze'],[]],
+  investigate:['조사하다',['examine','probe','explore'],[]],
+  explore:['탐험하다, 탐구하다',['investigate','examine'],[]],
+  discover:['발견하다',['find','uncover','detect'],[]],
+  demonstrate:['증명하다, 보여주다',['show','prove','illustrate'],[]],
+  illustrate:['설명하다, 보여주다',['demonstrate','exemplify'],[]],
+  indicate:['나타내다, 가리키다',['show','signal','suggest'],[]],
+  suggest:['제안하다, 시사하다',['propose','recommend','imply'],[]],
+  recommend:['추천하다',['suggest','advise','propose'],[]],
+  advise:['조언하다',['recommend','counsel','suggest'],[]],
+  warn:['경고하다',['caution','alert'],[]],
+  assume:['가정하다',['presume','suppose'],[]],
+  presume:['추정하다',['assume','suppose'],[]],
+  conclude:['결론짓다',['deduce','infer','decide'],[]],
+  infer:['추론하다',['deduce','conclude','gather'],[]],
+  deduce:['추론하다',['infer','conclude','reason'],[]],
+  summarize:['요약하다',['condense','recap'],[]],
+  extend:['연장하다, 확장하다',['prolong','lengthen','stretch'],['shorten','reduce']],
+  shorten:['줄이다, 단축하다',['reduce','abbreviate'],['extend','lengthen']],
+  prolong:['연장하다',['extend','lengthen'],['shorten']]
+};
 
 /* ---------- data ---------- */
 function selectClass(cid) {
@@ -287,10 +781,8 @@ function classFormHtml() {
    ctx null = normal view (key words highlighted); otherwise {n, answers, mode:'screen'|'print'}
    shares one counter, so the class screen and the printed sheet number blanks identically. */
 const unbr = s => String(s || '').replace(/\[([^\]]+)\]/g, '$1');
-// Blanks go on key words and key phrases inside the content, so the rest of each sentence stays as a cue.
-// ctx.level: 'key' = bracketed key words/phrases only; 'vocab' = also the words in the vocab list.
-// ctx.auto: this passage's vocab words, blanked wherever they appear in a line that has no brackets.
-const BLANK_LEVELS = { key: '핵심어·구문', vocab: '핵심어·구문 + 어휘' };
+// Blanks go only on bracketed key words and key phrases inside the content lines, so the rest of each
+// sentence stays as a cue. The vocab list is never blanked.
 function blank(ans, ctx) {
   if (!ctx) return `<mark class="kw">${esc(ans)}</mark>`;
   const n = ++ctx.n; ctx.answers.push(ans);
@@ -298,43 +790,52 @@ function blank(ans, ctx) {
   if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">(${n})</span>`;
   return `<button class="blank" data-act="reveal" data-n="${n}" data-ans="${esc(ans)}" style="min-width:${w}em" aria-label="빈칸 ${n}">${n}</button>`;
 }
-const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-function rich(text, ctx) {
-  let t = String(text || '');
-  if (ctx && ctx.auto && ctx.auto.length && !t.includes('['))
-    t = t.replace(new RegExp('\\b(' + ctx.auto.map(reEsc).join('|') + ')\\b', 'gi'), '[$1]');
-  return t.split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
-}
-const vocabWord = l => (l.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+[^A-Za-z]/) || [])[1];
-const hasKeyBlanks = p => ['gist', 'flow', 'points', 'structure'].some(k => String(p[k] || '').includes('['));
-const levelOpts = () => Object.entries(BLANK_LEVELS).map(([k, v]) => `<option value="${k}" ${k === S.blankLevel ? 'selected' : ''}>빈칸: ${v}</option>`).join('');
-function vocabItem(line, ctx) {
-  ctx = ctx && ctx.level === 'vocab' ? ctx : null;
-  const m = !line.includes('[') && line.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+([^A-Za-z].*)$/);
-  return m && ctx ? blank(m[1], ctx) + ' ' + esc(m[2]) : rich(line, ctx);
-}
+const rich = (text, ctx) => String(text || '').split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
+const hasKeyBlanks = p => ['gist', 'flow', 'points'].some(k => String(p[k] || '').includes('['));
 function flowHtml(text, ctx, mini) {
   const steps = lines(text).map(l => { const k = l.indexOf(':'); return k > 0 && k < 14 ? [l.slice(0, k).trim(), l.slice(k + 1).trim()] : ['', l]; });
   if (!steps.length) return '';
   if (mini) return `<div class="flow-mini">구조 · ${steps.map(([a, b]) => a ? `<b>${esc(unbr(a))}</b>` : esc(unbr(b)).slice(0, 12)).join(' → ')}</div>`;
   return `<ol class="flow">${steps.map(([a, b]) => `<li>${a ? `<span class="step">${esc(unbr(a))}</span>` : '<span></span>'}<span>${rich(b, ctx)}</span></li>`).join('')}</ol>`;
 }
+/* --- vocab: word, meaning, synonyms, antonyms. In reminders the synonyms and antonyms keep only their
+   first letter, so students write them out again every session. --- */
+const listOf = s => String(s || '').split(/[,;/]/).map(x => x.trim()).filter(Boolean);
+const blankWord = () => ({ w: '', m: '', syn: '', ant: '' });
+function wordsOf(p) {
+  if (Array.isArray(p.words)) return p.words.filter(x => x && String(x.w || '').trim());
+  return lines(unbr(p.vocab)).map(l => { const m = l.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+(.*)$/); return m ? { w: m[1], m: m[2], syn: '', ant: '' } : { w: l, m: '', syn: '', ant: '' }; });
+}
+function firstLetterBlank(v, ctx) {
+  if (!ctx) return esc(v);
+  const n = ++ctx.n; ctx.answers.push(v);
+  const w = Math.min(10, Math.max(3.5, v.length * 0.6 + 1.5)).toFixed(1), body = `<sup>${n}</sup><span class="f">${esc(v[0])}</span>`;
+  if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">${body}</span>`;
+  return `<button class="blank hint" data-act="reveal" data-n="${n}" data-ans="${esc(v)}" style="min-width:${w}em" aria-label="빈칸 ${n}, ${esc(v[0])}로 시작">${body}</button>`;
+}
+function vocabHtml(ws, ctx, relatedOnly) {
+  if (relatedOnly) ws = ws.filter(x => listOf(x.syn).length || listOf(x.ant).length);
+  if (!ws.length) return '';
+  const rel = (sym, label, s) => { const a = listOf(s); return a.length ? `<span class="rel"><b title="${label}">${sym}</b> ${a.map(v => firstLetterBlank(v, ctx)).join(', ')}</span>` : ''; };
+  return `<div class="vocab">${ws.map(x => `<div class="vrow"><span class="vw">${esc(x.w)}</span><span class="vm">${esc(x.m)}</span>${rel('≒', '동의어', x.syn)}${rel('↔', '반의어', x.ant)}</div>`).join('')}</div>`;
+}
+
 function passageHtml(p, t, ctx) {
-  const pts = lines(p.points), voc = lines(p.vocab), st = lines(p.structure);
-  if (ctx) ctx.auto = voc.map(vocabWord).filter(Boolean);
+  const pts = lines(p.points), ws = wordsOf(p), st = lines(p.structure);
   const title = esc(unbr(p.title) || '제목 없는 지문');
   if (t === 'short') return `<div class="psg"><span class="psg-title">${title}</span>${p.gist ? ` — <span class="gist"><span class="m">${rich(p.gist, ctx)}</span></span>` : ''}</div>`;
   if (t === 'mid') return `<div class="psg"><div class="psg-title">${title}</div>
     ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx, true)}
-    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}</div>`;
+    ${pts.length ? `<ul class="pts">${pts.slice(0, 2).map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}
+    ${vocabHtml(ws, ctx, true)}</div>`;
   return `<div class="psg">
     <div class="psg-title">${title}</div>
     ${p.gist ? `<p class="gist"><span class="m">${rich(p.gist, ctx)}</span></p>` : ''}
     ${flowHtml(p.flow, ctx)}
     ${pts.length ? `<ul class="pts">${pts.map(x => `<li>${rich(x, ctx)}</li>`).join('')}</ul>` : ''}
-    ${voc.length ? `<div class="chips">${voc.map(x => `<span class="chip">${vocabItem(x, ctx)}</span>`).join('')}</div>` : ''}
-    ${st.length ? `<div class="struct">${st.map(x => `<div>${rich(x, ctx)}</div>`).join('')}</div>` : ''}
+    ${vocabHtml(ws, ctx)}
+    ${st.length ? `<div class="struct">${st.map(x => `<div>${esc(unbr(x))}</div>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -391,11 +892,22 @@ function editorHtml() {
         <textarea id="p-${p.id}-flow" data-i="${i}" data-f="flow" rows="3" placeholder="도입: 정보가 많을수록 좋다는 통념&#10;반박: 정보 과잉은 [판단력]을 떨어뜨림&#10;결론: 필요한 정보만 고르는 능력이 중요">${esc(p.flow)}</textarea></label>
       <label>핵심 내용 · 시험 포인트 <span class="hint">한 줄에 하나씩</span>
         <textarea id="p-${p.id}-points" data-i="${i}" data-f="points" rows="3" placeholder="예: 빈칸 — 'paradox' 앞뒤 대조 구조">${esc(p.points)}</textarea></label>
-      <div class="grid2">
-        <label>중요 어휘 <span class="hint">한 줄에 하나 · 단어 뜻</span>
-          <textarea id="p-${p.id}-vocab" data-i="${i}" data-f="vocab" rows="3" placeholder="deteriorate 악화되다">${esc(p.vocab)}</textarea></label>
-        <label>핵심 구문 · 어법 <span class="hint">한 줄에 하나씩</span>
-          <textarea id="p-${p.id}-structure" data-i="${i}" data-f="structure" rows="3" placeholder="It is not until A that B">${esc(p.structure)}</textarea></label>
+      <label>핵심 구문 · 어법 <span class="hint">한 줄에 하나씩</span>
+        <textarea id="p-${p.id}-structure" data-i="${i}" data-f="structure" rows="2" placeholder="It is not until A that B">${esc(p.structure)}</textarea></label>
+      <div class="vt">
+        <div class="vt-label">중요 어휘 <span class="hint">동의어·반의어는 쉼표로 구분 · 다음 수업 리마인드에서 첫 글자만 남기고 빈칸이 돼요</span></div>
+        <div class="vt-row vt-head" aria-hidden="true"><span>단어</span><span>뜻</span><span>동의어 ≒</span><span>반의어 ↔</span><span></span></div>
+        ${p.words.map((x, k) => `<div class="vt-row">
+          <input type="text" id="p-${p.id}-w${k}" data-i="${i}" data-k="${k}" data-wf="w" placeholder="deteriorate" value="${esc(x.w)}" aria-label="단어">
+          <input type="text" id="p-${p.id}-m${k}" data-i="${i}" data-k="${k}" data-wf="m" placeholder="악화되다" value="${esc(x.m)}" aria-label="뜻">
+          <input type="text" id="p-${p.id}-s${k}" data-i="${i}" data-k="${k}" data-wf="syn" placeholder="worsen, decline" value="${esc(x.syn)}" aria-label="동의어">
+          <input type="text" id="p-${p.id}-a${k}" data-i="${i}" data-k="${k}" data-wf="ant" placeholder="improve" value="${esc(x.ant)}" aria-label="반의어">
+          <button class="btn ghost" data-act="w-del" data-i="${i}" data-k="${k}" aria-label="단어 삭제">✕</button></div>`).join('')}
+        <div class="pe-tools">
+          <button class="btn" data-act="w-add" data-i="${i}">+ 단어 추가</button>
+          ${S.sample ? `<button class="btn" data-act="w-ai" data-i="${i}" ${p._busy ? 'disabled' : ''}>AI로 빈 동의어·반의어 채우기</button>` : ''}
+          <span class="hint">사전에 있는 단어는 적으면 뜻·동의어·반의어가 자동으로 채워져요.</span>
+        </div>
       </div></div>`).join('')}
     <div><button class="btn" data-act="p-add">+ 지문 추가</button></div>
     <div class="row">
@@ -417,7 +929,7 @@ function remindSession(s, N, big, ctx) {
 }
 // One pass over sessions 1..N-1 with a shared blank counter (mode null = answers shown).
 function buildRemind(N, mode, big) {
-  const ctx = mode ? { n: 0, answers: [], mode, level: S.blankLevel } : null;
+  const ctx = mode ? { n: 0, answers: [], mode } : null;
   const parts = prevOf(N).map(s => ({ s, html: remindSession(s, N, big, ctx) }));
   return { parts, answers: ctx ? ctx.answers : [] };
 }
@@ -433,15 +945,14 @@ function remindHtml() {
   const nBlanks = buildRemind(N, 'print').answers.length;
   let h = `<div class="row" style="margin-bottom:10px">
       <select id="remind-n" aria-label="리마인드할 수업" style="width:auto;max-width:100%">${opts}</select>
-      <select id="blank-level" aria-label="빈칸 방식" style="width:auto">${levelOpts()}</select>
       <button class="btn primary" data-act="present" data-blanks="1">▶ 빈칸 퀴즈로 띄우기</button>
       <button class="btn" data-act="present">정답 화면으로 띄우기</button>
       ${S.downloads ? `<button class="btn" data-act="sheet">학습지 저장 (인쇄용)</button>` : ''}</div>
     <p class="note">바로 지난 회차는 자세히, 2~3회 전은 요지와 포인트 두 개, 그보다 오래된 회차는 요지 한 줄로 줄여서 보여 줘요.<br>
-      요지·글의 구조·시험 포인트·구문 문장 속 <b>핵심어와 핵심 구문</b>([대괄호]로 묶은 말)만 빈칸이 되고, 나머지 문장은 남아서 내용을 떠올리는 실마리가 돼요.
-      ${S.blankLevel === 'vocab' ? '중요 어휘 목록의 단어도 가려요. ' : ''}지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
+      글의 구조·시험 포인트 문장 속 <b>핵심어와 핵심 구문</b>([대괄호]로 묶은 말)만 빈칸이 되고, 나머지 문장과 괄호 속 출제 메모는 남아서 내용을 떠올리는 실마리가 돼요.
+      지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
   const bare = prev.flatMap(s => s.passages || []).filter(p => !hasKeyBlanks(p)).length;
-  if (bare) h += `<div class="banner row">핵심어 빈칸을 정하지 않은 지문이 <b>${bare}개</b> 있어요. 이 지문들은 어휘 목록 단어만 빈칸이 돼요.
+  if (bare) h += `<div class="banner row">핵심어 빈칸을 정하지 않은 지문이 <b>${bare}개</b> 있어요. 이 지문들은 빈칸 없이 보여요.
       <span class="spacer"></span>${S.sample && !S.readOnly ? `<button class="btn" data-act="ai-keys" ${S.keysBusy ? 'disabled' : ''}>${S.keysBusy ? 'AI가 고르는 중…' : 'AI로 핵심어 빈칸 정하기'}</button>` : ''}</div>`;
   if (S.sample) {
     const text = S.aiBusy ? S.aiText : saved ? saved.text : '';
@@ -477,16 +988,19 @@ async function aiFill(i) {
     const r = await S.sample.json(
       '너는 한국 고등학교 영어 내신 수업을 돕는 조교야. 아래 영어 지문(또는 수업 메모)을 읽고, 다음 수업 시작 때 10분 복습에 쓸 요약을 만들어.\n' +
       '반드시 JSON 객체 하나만 답해. 형식:\n' +
-      '{"title":"출처를 알 수 있으면 짧게, 모르면 빈 문자열","gist":"한국어 한 줄 요지 (40자 이내)","flow":["글의 구조를 3~5단계로, 각 항목은 \'단계: 내용\' 형식 (단계 예: 도입, 통념, 주장, 반박, 근거, 예시, 결론)"],"points":["핵심 내용·시험 포인트 3~5개, 한국어 한 줄씩 (빈칸·순서·삽입·어법 출제 포인트 포함)"],"vocab":["중요 어휘 5~8개, \'word 뜻\' 형식"],"structure":["시험에 나올 핵심 구문·어법 2~3개, 원문 표현 + 짧은 설명"]}\n' +
-      '학생 복습용 빈칸 퀴즈로도 쓸 거야. gist, flow, points, structure 각 항목에서 학생이 꼭 기억해야 할 핵심어나 짧은 핵심 구문(1~4단어) 1~2개만 [대괄호]로 묶어 줘 (예: "정보 과잉은 [판단력]을 떨어뜨린다"). 문장 전체를 묶지 말고, flow의 단계 이름과 vocab에는 대괄호를 쓰지 마.\n\n' +
+      '{"title":"출처를 알 수 있으면 짧게, 모르면 빈 문자열","gist":"한국어 한 줄 요지 (40자 이내)","flow":["글의 구조를 3~5단계로, 각 항목은 \'단계: 내용\' 형식 (단계 예: 도입, 통념, 주장, 반박, 근거, 예시, 결론)"],"points":["지문 내용을 흐름대로 정리한 한국어 문장 4~5개. 각 문장 끝 괄호에 출제 메모 (예: \'1910년대에는 입꼬리가 거의 [수평]에 가까웠다 (연결어 But in the post-World War II era 주목)\'). 연도·수치 같은 근거도 넣고, 마지막 줄은 순서·삽입 포인트"],"vocab":[{"w":"중요 어휘 5~8개 (영어 단어)","m":"지문 속 뜻 (한국어)","syn":["지문 속 뜻에 맞는 동의어 1~3개"],"ant":["반의어 0~2개, 없으면 빈 배열"]}],"structure":["시험에 나올 핵심 구문·어법 2~3개, 원문 표현 + 짧은 설명"]}\n' +
+      '학생 복습용 빈칸 퀴즈로도 쓸 거야. flow, points의 각 줄에서 내용의 핵심이 되는 키워드나 짧은 핵심 구문(1~4단어)을 1~4개 [대괄호]로 묶어 줘. 문장 전체, 괄호 속 출제 메모, 연도·숫자는 묶지 마. gist, flow의 단계 이름, vocab, structure에는 대괄호를 쓰지 마.\n\n' +
       '지문/메모:\n' + String(p.raw).slice(0, 15000));
     const arr = v => Array.isArray(v) ? v.map(String).join('\n') : String(v || '');
     if (!p.title && r.title) p.title = String(r.title);
     if (r.gist) p.gist = String(r.gist);
     if (r.flow) p.flow = arr(r.flow);
     if (r.points) p.points = arr(r.points);
-    if (r.vocab) p.vocab = arr(r.vocab);
-    if (r.structure) p.structure = arr(r.structure);
+    if (Array.isArray(r.vocab)) {
+      const ws = r.vocab.map(x => typeof x === 'string' ? wordsOf({ vocab: x })[0] : { w: String(x.w || ''), m: String(x.m || ''), syn: [].concat(x.syn || []).map(String).join(', '), ant: [].concat(x.ant || []).map(String).join(', ') }).filter(x => x && x.w);
+      if (ws.length) p.words = ws.map(x => ({ ...blankWord(), ...x }));
+    }
+    if (r.structure) p.structure = unbr(arr(r.structure));
     toast('AI 초안을 채웠어요. 확인하고 저장해 주세요.');
   } catch (e) { const t = errText(e); if (t) toast(t); }
   finally { p._busy = false; render(); }
@@ -495,29 +1009,56 @@ async function aiFill(i) {
 // Ask Claude to bracket 1-2 key words or short key phrases per line. A line comes back only with brackets
 // added; if Claude changed any other character, the original line is kept.
 async function aiKeyBlanks(passages) {
-  const items = passages.map(p => ({ id: p.id, gist: unbr(p.gist), flow: lines(unbr(p.flow)), points: lines(unbr(p.points)), structure: lines(unbr(p.structure)) }));
+  // The gist stays visible as the passage's anchor, so it is not sent.
+  const items = passages.map(p => ({ id: p.id, flow: lines(unbr(p.flow)), points: lines(unbr(p.points)) }));
   const r = await S.sample.json(
-    '고등학교 영어 내신 수업의 지문 복습용 빈칸 퀴즈를 만들려고 해. 아래 각 줄에서 학생이 내용의 핵심을 떠올리는 데 꼭 필요한 핵심 키워드나 핵심 구문을 1~2개만 [대괄호]로 묶어 줘.\n' +
-    '규칙:\n- 묶는 부분은 1~4단어 정도로 짧게. 문장 전체나 절 전체를 묶지 마. 빈칸 밖에 남은 말만 보고도 무엇이 들어갈지 떠올릴 수 있어야 해.\n' +
-    '- flow 줄의 "단계:" 이름(콜론 앞)은 묶지 마.\n- structure 줄에서는 시험에 나올 구문·어법의 핵심 부분(예: not so much A [as] B)을 묶어.\n' +
+    '고등학교 영어 내신 수업의 지문 복습용 빈칸 퀴즈를 만들려고 해. 학생이 빈칸 밖에 남은 말을 실마리로 지문 내용의 흐름을 떠올릴 수 있어야 해.\n' +
+    '아래 각 줄에서 지문 내용의 핵심이 되는 키워드나 짧은 핵심 구문을 [대괄호]로 묶어 줘.\n' +
+    '규칙:\n- 한 줄에 1~4개. 각 빈칸은 1~4단어로 짧게. 문장 전체나 절 전체를 묶지 마.\n' +
+    '- 묶을 것: 지문 내용을 이해했는지 확인할 수 있는 내용어 (예: "100년 전 사진은 [무표정]이 보통", "[작은 입]이 아름답다고 여겨졌다", "촬영을 [즐거움]과 연결").\n' +
+    '- 묶지 말 것: 괄호 ( ) 안의 출제 메모, 연도·숫자·자료 출처 같은 근거, "~이다/~했다" 같은 서술어, 접속어. 이것들은 실마리로 남겨 둬.\n' +
+    '- 순서·삽입처럼 흐름을 설명하는 줄은 핵심이 되는 말 1개만 묶거나 묶지 않아도 돼.\n' +
+    '- flow 줄의 "단계:" 이름(콜론 앞)은 묶지 마.\n' +
     '- 대괄호만 추가하고 글자는 하나도 바꾸거나 빼지 마. 줄 수와 순서도 그대로.\n' +
-    '반드시 JSON 객체 하나만 답해: {"passages":[{"id":"...","gist":"...","flow":["..."],"points":["..."],"structure":["..."]}]}\n\n' +
+    '반드시 JSON 객체 하나만 답해: {"passages":[{"id":"...","flow":["..."],"points":["..."]}]}\n\n' +
     JSON.stringify({ passages: items }));
   const got = new Map((Array.isArray(r && r.passages) ? r.passages : []).map(x => [String(x && x.id), x]));
   const fix = (orig, cand) => typeof cand === 'string' && cand.includes('[') && unbr(cand).trim() === unbr(orig).trim() ? cand.trim() : orig;
   const fixLines = (text, arr) => lines(text).map((l, k) => fix(l, Array.isArray(arr) ? arr[k] : null)).join('\n');
   return passages.map(p => {
     const x = got.get(p.id); if (!x) return p;
-    return { ...p, gist: fix(p.gist || '', x.gist), flow: fixLines(p.flow, x.flow), points: fixLines(p.points, x.points), structure: fixLines(p.structure, x.structure) };
+    return { ...p, flow: fixLines(p.flow, x.flow), points: fixLines(p.points, x.points) };
   });
+}
+async function aiSynAnt(i) {
+  const p = S.editing.data.passages[i];
+  p.words.forEach(dictFill);
+  const need = p.words.filter(x => x.w.trim() && (!x.syn.trim() || !x.ant.trim() || !x.m.trim()));
+  if (!need.length) { render(); return toast(p.words.some(x => x.w.trim()) ? '모든 단어가 채워져 있어요.' : '단어를 먼저 적어 주세요.'); }
+  p._busy = true; render();
+  try {
+    const r = await S.sample.json(
+      '고등학교 영어 내신 수업에서 다룬 지문의 중요 어휘야. 각 단어에 대해 지문 속 뜻(한국어), 그 뜻에 맞는 동의어 1~3개, 반의어 0~2개(자연스러운 반의어가 없으면 빈 배열)를 알려 줘.\n' +
+      (unbr(p.gist) ? `지문 요지: ${unbr(p.gist)}\n` : '') +
+      '반드시 JSON 객체 하나만 답해: {"words":[{"w":"단어","m":"뜻","syn":["..."],"ant":["..."]}]}\n\n단어: ' + need.map(x => x.w.trim() + (x.m ? ` (${x.m})` : '')).join(', '));
+    const got = new Map((Array.isArray(r && r.words) ? r.words : []).map(x => [String(x && x.w || '').trim().toLowerCase(), x]));
+    for (const x of need) {
+      const g = got.get(x.w.trim().toLowerCase()); if (!g) continue;
+      if (!x.m.trim() && g.m) x.m = String(g.m);
+      if (!x.syn.trim()) x.syn = [].concat(g.syn || []).map(String).join(', ');
+      if (!x.ant.trim()) x.ant = [].concat(g.ant || []).map(String).join(', ');
+    }
+    toast('빈 칸을 채웠어요. 확인하고 저장해 주세요.');
+  } catch (e) { const t = errText(e); if (t) toast(t); }
+  finally { p._busy = false; render(); }
 }
 async function aiKeysOne(i) {
   const p = S.editing.data.passages[i];
-  if (!['gist', 'flow', 'points', 'structure'].some(k => String(p[k] || '').trim())) return toast('요지나 구조, 포인트를 먼저 적어 주세요.');
+  if (!['flow', 'points'].some(k => String(p[k] || '').trim())) return toast('글의 구조나 시험 포인트를 먼저 적어 주세요.');
   p._busy = true; render();
   try {
     const [q] = await aiKeyBlanks([p]);
-    Object.assign(p, { gist: q.gist, flow: q.flow, points: q.points, structure: q.structure });
+    Object.assign(p, { flow: q.flow, points: q.points });
     toast(hasKeyBlanks(p) ? '핵심어에 빈칸 표시를 했어요. 확인하고 저장해 주세요.' : 'AI가 빈칸을 고르지 못했어요. 직접 골라 주세요.');
   } catch (e) { const t = errText(e); if (t) toast(t); }
   finally { p._busy = false; render(); }
@@ -545,7 +1086,7 @@ async function aiRemind() {
   const N = S.remindN || maxNo() + 1, cid = S.cid;
   const prev = prevOf(N);
   const rec = prev.map(s => `[${s.no}회차 · ${s.date || ''} · ${tierLabel(N, s.no)}]\n` + (s.passages || []).map(p =>
-    `- 지문: ${unbr(p.title) || '제목 없음'}\n  요지: ${unbr(p.gist)}\n  구조: ${lines(unbr(p.flow)).join(' → ')}\n  포인트: ${lines(unbr(p.points)).join(' / ')}\n  어휘: ${lines(unbr(p.vocab)).join(', ')}\n  구문: ${lines(unbr(p.structure)).join(' / ')}`).join('\n')).join('\n\n');
+    `- 지문: ${unbr(p.title) || '제목 없음'}\n  요지: ${unbr(p.gist)}\n  구조: ${lines(unbr(p.flow)).join(' → ')}\n  포인트: ${lines(unbr(p.points)).join(' / ')}\n  어휘: ${wordsOf(p).map(x => `${x.w} ${x.m}${x.syn ? ` ≒ ${x.syn}` : ''}${x.ant ? ` ↔ ${x.ant}` : ''}`).join('; ')}\n  구문: ${lines(unbr(p.structure)).join(' / ')}`).join('\n')).join('\n\n');
   S.aiBusy = true; S.aiText = ''; aiCtl = new AbortController(); render();
   try {
     const { text } = await S.sample(
@@ -587,8 +1128,7 @@ function drawPresent() {
       ${!fresh && !P.running ? `<button class="btn ghost" data-act="pr-reset">처음으로</button>` : ''}
       <span class="spacer"></span>
       <button class="btn" data-act="pr-mode">${P.blanks ? '정답 화면으로' : '빈칸 퀴즈로'}</button>
-      ${P.blanks ? `<select id="pr-level" aria-label="빈칸 방식" style="width:auto">${levelOpts()}</select>
-        <button class="btn" data-act="pr-openall">이 화면 정답 보기</button>` : ''}
+      ${P.blanks ? `<button class="btn" data-act="pr-openall">이 화면 정답 보기</button>` : ''}
       <span class="pr-count">${P.i + 1} / ${P.slides.length}</span>
       <button class="btn" data-act="pr-prev" ${P.i === 0 ? 'disabled' : ''} aria-label="이전">←</button>
       <button class="btn primary" data-act="pr-next" ${P.i === P.slides.length - 1 ? 'disabled' : ''} aria-label="다음">→</button>
@@ -626,6 +1166,8 @@ ul.pts{margin:4px 0 0;padding-left:20px}
 .flow li{border-left:2px solid #999;padding:2px 0 2px 10px}
 .step{font-weight:700;font-size:9pt;border:1px solid #999;border-radius:3px;padding:0 5px;margin-right:6px}
 .flow-mini{font-size:9.5pt;color:#444}
+.vocab{margin-top:4px;font-size:10.5pt}.vrow{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}.vw{font-weight:700}.vm{color:#444}.rel b{margin-right:2px}
+.bl sup{font-size:7pt;color:#777;margin-right:2px}.bl .f{color:#111;font-size:11pt;font-weight:700}
 .bl{display:inline-block;max-width:100%;border-bottom:1.5px solid #111;text-align:left;font-size:8.5pt;color:#555;margin:0 2px;line-height:1.4;vertical-align:baseline}
 .key{break-before:page;page-break-before:always}
 .key ol{columns:3;font-size:10.5pt}
@@ -634,7 +1176,7 @@ ul.pts{margin:4px 0 0;padding-left:20px}
 @media print{.tools{display:none}body{padding:0}}
 </style></head><body>
 <div class="tools"><button onclick="window.print()">인쇄하기</button> 정답은 마지막 쪽에 있어요. 학생용은 앞쪽만 인쇄하세요.</div>
-<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">1~${N - 1}회차 복습 · 빈칸(${BLANK_LEVELS[S.blankLevel]}) ${answers.length}개</div></div>
+<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">1~${N - 1}회차 복습 · 빈칸 ${answers.length}개</div></div>
 <div class="name">이름 ____________ &nbsp; 점수 ____ / ${answers.length}</div></div>
 ${parts.map(p => p.html).join('\n')}
 <section class="key"><h1>정답 · ${esc(title)}</h1><ol${answers.some(a => a.length > 14) ? ' style="columns:1"' : ''}>${answers.map(a => `<li>${esc(a)}</li>`).join('')}</ol></section>
@@ -668,7 +1210,16 @@ function ask(msg, yesLabel, onYes) {
   $('#cf-yes').onclick = () => { c.hidden = true; onYes(); };
   $('#cf-no').focus();
 }
-const blankPassage = () => ({ id: rid(), title: '', raw: '', gist: '', flow: '', points: '', vocab: '', structure: '' });
+const blankPassage = () => ({ id: rid(), title: '', raw: '', gist: '', flow: '', points: '', vocab: '', words: [blankWord()], structure: '' });
+// Fill a vocab row's empty meaning/synonym/antonym cells from the built-in dictionary.
+function dictFill(x) {
+  const d = SYN_DICT[String(x.w || '').trim().toLowerCase()];
+  if (!d) return false;
+  if (!x.m) x.m = d[0];
+  if (!x.syn) x.syn = d[1].join(', ');
+  if (!x.ant) x.ant = d[2].join(', ');
+  return true;
+}
 
 /* ---------- events ---------- */
 let lastField = null;
@@ -676,15 +1227,16 @@ document.addEventListener('focusin', e => { if (e.target.dataset && e.target.dat
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.f && S.editing) S.editing.data.passages[+t.dataset.i][t.dataset.f] = t.value;
+  else if (t.dataset.wf && S.editing) S.editing.data.passages[+t.dataset.i].words[+t.dataset.k][t.dataset.wf] = t.value;
   else if (t.dataset.sf && S.editing) S.editing.data[t.dataset.sf] = t.value;
   else if (t.dataset.cf && S.classForm) S.classForm[t.dataset.cf] = t.value;
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'remind-n') { S.remindN = +e.target.value; S.aiText = ''; render(); }
-  if (e.target.id === 'blank-level' || e.target.id === 'pr-level') {
-    S.blankLevel = e.target.value; store.set('remind.level', S.blankLevel);
-    if (S.present) { S.present.open.clear(); S.present.slides = buildSlides(S.present.N, S.present.blanks); drawPresent(); }
-    render();
+  if (e.target.dataset.wf === 'w' && S.editing) {
+    const x = S.editing.data.passages[+e.target.dataset.i].words[+e.target.dataset.k];
+    const before = x.m + x.syn + x.ant;
+    if (dictFill(x) && x.m + x.syn + x.ant !== before) { const id = document.activeElement && document.activeElement.id; render(); if (id) document.getElementById(id)?.focus(); }
   }
   if (e.target.id === 'pr-min' && S.present) {
     S.timerMin = +e.target.value; store.set('remind.min', String(S.timerMin));
@@ -738,7 +1290,10 @@ document.addEventListener('click', async e => {
     case 'sess-new': S.editing = { data: { no: maxNo() + 1, date: today(), passages: [blankPassage()] } }; S.copying = null; render(); break;
     case 'sess-edit': {
       const s = S.sessions.find(x => x.id === id);
-      S.editing = { id, data: { no: s.no, date: s.date || '', passages: (s.passages || []).map(p => ({ ...blankPassage(), ...p })) } };
+      S.editing = { id, data: { no: s.no, date: s.date || '', passages: (s.passages || []).map(p => {
+        const ws = wordsOf(p).map(x => ({ ...blankWord(), ...x }));
+        return { ...blankPassage(), ...p, words: ws.length ? ws : [blankWord()] };
+      }) } };
       if (!S.editing.data.passages.length) S.editing.data.passages.push(blankPassage());
       render(); break;
     }
@@ -747,11 +1302,14 @@ document.addEventListener('click', async e => {
     case 'p-del': S.editing.data.passages.splice(i, 1); if (!S.editing.data.passages.length) S.editing.data.passages.push(blankPassage()); render(); break;
     case 'p-ai': aiFill(i); break;
     case 'p-keys': aiKeysOne(i); break;
+    case 'w-add': S.editing.data.passages[i].words.push(blankWord()); render(); document.getElementById(`p-${S.editing.data.passages[i].id}-w${S.editing.data.passages[i].words.length - 1}`)?.focus(); break;
+    case 'w-del': { const ws = S.editing.data.passages[i].words; ws.splice(+b.dataset.k, 1); if (!ws.length) ws.push(blankWord()); render(); break; }
+    case 'w-ai': aiSynAnt(i); break;
     case 'ai-keys': aiKeysRemind(); break;
     case 'p-blank': {
       const el = lastField;
-      if (!el || !document.contains(el) || +el.dataset.i !== i || el.dataset.f === 'raw' || el.dataset.f === 'title' || el.selectionStart === el.selectionEnd)
-        return toast('요지·구조·포인트·어휘·구문 칸에서 빈칸으로 만들 말을 먼저 드래그해 주세요.');
+      if (!el || !document.contains(el) || +el.dataset.i !== i || ['raw', 'title', 'structure'].includes(el.dataset.f) || el.selectionStart === el.selectionEnd)
+        return toast('요지·글의 구조·시험 포인트 칸에서 빈칸으로 만들 말을 먼저 드래그해 주세요.');
       const v = el.value, s = el.selectionStart, t = el.selectionEnd;
       const nv = v.slice(0, s) + '[' + v.slice(s, t) + ']' + v.slice(t);
       S.editing.data.passages[i][el.dataset.f] = nv; render();
@@ -760,7 +1318,10 @@ document.addEventListener('click', async e => {
     }
     case 'sess-save': {
       const ed = S.editing, d = ed.data;
-      const passages = d.passages.map(({ _busy, ...p }) => p).filter(p => ['title', 'raw', 'gist', 'flow', 'points', 'vocab', 'structure'].some(k => String(p[k] || '').trim()));
+      const passages = d.passages.map(({ _busy, ...p }) => {
+        const words = p.words.map(x => ({ w: x.w.trim(), m: x.m.trim(), syn: listOf(x.syn).join(', '), ant: listOf(x.ant).join(', ') })).filter(x => x.w);
+        return { ...p, words, vocab: words.map(x => `${x.w} ${x.m}`.trim()).join('\n') };
+      }).filter(p => p.words.length || ['title', 'raw', 'gist', 'flow', 'points', 'structure'].some(k => String(p[k] || '').trim()));
       if (!passages.length) return toast('지문을 하나 이상 적어 주세요.');
       const body = { no: d.no, date: d.date, passages, updatedAt: new Date().toISOString() };
       const path = `classes/${S.cid}/sessions`;
