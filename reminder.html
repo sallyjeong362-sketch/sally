@@ -132,6 +132,11 @@ mark.kw{background:none;color:var(--accent);font-weight:700}
 .vt-head{font-size:12px;color:var(--muted)}
 @media (max-width:600px){.vt-row{grid-template-columns:1fr 1fr auto}.vt-row input:nth-child(3),.vt-row input:nth-child(4){grid-column:span 1}.vt-head{display:none}}
 .pr-slide .vocab{font-size:.9em}
+.opt{display:grid;grid-template-columns:3.5em minmax(0,1fr);gap:10px;align-items:baseline}
+.opt-l{font-size:13px;font-weight:700;color:var(--muted)}
+.opt-v{display:flex;flex-direction:column;gap:4px}
+label.radio{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:6px;font-weight:400;font-size:14px;cursor:pointer}
+.paper{width:100%;height:560px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .pr-slide .flow .step{font-size:.7em}
 
 /* presentation */
@@ -187,7 +192,8 @@ const S = {
   classForm: null,   // {id?, school, grade, name}
   editing: null,     // {id?, data:{no,date,passages}}
   copying: null, remindN: null, aiBusy: false, aiText: '', sideOpen: false,
-  present: null, downloads: null, timerMin: +store.get('remind.min') || 10
+  present: null, downloads: null, timerMin: +store.get('remind.min') || 10,
+  print: null        // print panel options while it is open
 };
 let unsubSess = null;
 
@@ -783,11 +789,15 @@ function classFormHtml() {
 const unbr = s => String(s || '').replace(/\[([^\]]+)\]/g, '$1');
 // Blanks go only on bracketed key words and key phrases inside the content lines, so the rest of each
 // sentence stays as a cue. The vocab list is never blanked.
+// Printed sheets may switch a blank kind off (ctx.keys / ctx.rel === false) or print the answer key
+// (ctx.reveal), which keeps the same numbering with the answers written in.
 function blank(ans, ctx) {
   if (!ctx) return `<mark class="kw">${esc(ans)}</mark>`;
+  if (ctx.keys === false) return esc(ans);
   const n = ++ctx.n; ctx.answers.push(ans);
   const w = Math.min(14, Math.max(4.5, ans.length * 0.65 + 2)).toFixed(1);
-  if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">(${n})</span>`;
+  // Paper blanks are wider than screen ones, to leave room for handwriting.
+  if (ctx.mode === 'print') return ctx.reveal ? `<span class="bl ans"><sup>${n}</sup>${esc(ans)}</span>` : `<span class="bl" style="min-width:${Math.min(18, Math.max(6, ans.length * 0.9 + 3)).toFixed(1)}em">(${n})</span>`;
   return `<button class="blank" data-act="reveal" data-n="${n}" data-ans="${esc(ans)}" style="min-width:${w}em" aria-label="빈칸 ${n}">${n}</button>`;
 }
 const rich = (text, ctx) => String(text || '').split(/\[([^\]]+)\]/).map((p, i) => i % 2 ? blank(p, ctx) : esc(p)).join('');
@@ -807,10 +817,10 @@ function wordsOf(p) {
   return lines(unbr(p.vocab)).map(l => { const m = l.match(/^([A-Za-z][A-Za-z '.~-]*?)\s+(.*)$/); return m ? { w: m[1], m: m[2], syn: '', ant: '' } : { w: l, m: '', syn: '', ant: '' }; });
 }
 function firstLetterBlank(v, ctx) {
-  if (!ctx) return esc(v);
+  if (!ctx || ctx.rel === false) return esc(v);
   const n = ++ctx.n; ctx.answers.push(v);
   const w = Math.min(10, Math.max(3.5, v.length * 0.6 + 1.5)).toFixed(1), body = `<sup>${n}</sup><span class="f">${esc(v[0])}</span>`;
-  if (ctx.mode === 'print') return `<span class="bl" style="min-width:${w}em">${body}</span>`;
+  if (ctx.mode === 'print') return ctx.reveal ? `<span class="bl ans"><sup>${n}</sup>${esc(v)}</span>` : `<span class="bl" style="min-width:${Math.min(12, Math.max(5.5, v.length * 0.8 + 2.5)).toFixed(1)}em">${body}</span>`;
   return `<button class="blank hint" data-act="reveal" data-n="${n}" data-ans="${esc(v)}" style="min-width:${w}em" aria-label="빈칸 ${n}, ${esc(v[0])}로 시작">${body}</button>`;
 }
 function vocabHtml(ws, ctx, relatedOnly) {
@@ -933,6 +943,44 @@ function buildRemind(N, mode, big) {
   const parts = prevOf(N).map(s => ({ s, html: remindSession(s, N, big, ctx) }));
   return { parts, answers: ctx ? ctx.answers : [] };
 }
+// A printed sheet. o.kind 'remind': sessions before o.N, shortened by age like the class screen;
+// 'test': sessions o.from..o.to, every passage in full.
+function buildSheet(o, reveal) {
+  const ctx = { n: 0, answers: [], mode: 'print', keys: o.keys, rel: o.rel, reveal };
+  const list = o.kind === 'test' ? S.sessions.filter(s => s.no >= o.from && s.no <= o.to).sort((a, b) => a.no - b.no) : prevOf(o.N);
+  const html = list.map(s => o.kind === 'test'
+    ? `<div class="card"><div class="sess-head"><span class="no">${s.no}회차</span><span class="date">${esc(s.date || '')}</span></div>
+        <div style="margin-top:6px">${(s.passages || []).map(p => passageHtml(p, 'full', ctx)).join('')}</div></div>`
+    : remindSession(s, o.N, false, ctx)).join('\n');
+  return { html, answers: ctx.answers, passages: list.reduce((k, s) => k + (s.passages || []).length, 0) };
+}
+const printDefaults = () => ({ kind: 'remind', from: 1, to: maxNo(), keys: true, rel: true, answer: 'both' });
+function printPanelHtml(N) {
+  const o = { ...S.print, N }, mx = maxNo(), sheet = buildSheet(o);
+  const radio = (key, val, label, hint) => `<label class="radio"><input type="radio" name="po-${key}" value="${val}" data-po="${key}" ${o[key] === val ? 'checked' : ''}> ${label}${hint ? ` <span class="hint">${hint}</span>` : ''}</label>`;
+  const nos = sel => S.sessions.map(s => s.no).sort((a, b) => a - b).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${k}회차</option>`).join('');
+  return `<div class="card stack" style="margin-bottom:16px;border-color:var(--accent)">
+    <div class="row"><h3 style="font-size:20px">인쇄용 퀴즈 · 시험지</h3><span class="spacer"></span><button class="btn ghost" data-act="print-close">닫기</button></div>
+    <div class="opt"><span class="opt-l">종류</span><div class="opt-v">
+      ${radio('kind', 'remind', '리마인드 퀴즈', `${N}회차 수업용 · 1~${N - 1}회차 누적, 오래된 회차일수록 짧게`)}
+      ${radio('kind', 'test', '확인 시험', '고른 회차의 지문을 모두 자세히')}</div></div>
+    ${o.kind === 'test' ? `<div class="opt"><span class="opt-l">범위</span><div class="opt-v row">
+      <select data-po="from" aria-label="시작 회차" style="width:auto">${nos(o.from)}</select> ~
+      <select data-po="to" aria-label="끝 회차" style="width:auto">${nos(o.to)}</select></div></div>` : ''}
+    <div class="opt"><span class="opt-l">빈칸</span><div class="opt-v">
+      <label class="radio"><input type="checkbox" data-po="keys" ${o.keys ? 'checked' : ''}> 내용 핵심어</label>
+      <label class="radio"><input type="checkbox" data-po="rel" ${o.rel ? 'checked' : ''}> 동의어·반의어 <span class="hint">첫 글자만 남김</span></label></div></div>
+    <div class="opt"><span class="opt-l">정답</span><div class="opt-v">
+      ${radio('answer', 'both', '학생용 + 정답지', '정답지는 새 쪽에서 시작')}
+      ${radio('answer', 'student', '학생용만')}
+      ${radio('answer', 'key', '정답지만')}</div></div>
+    <div class="row"><b>빈칸 ${sheet.answers.length}개</b><span class="hint">지문 ${sheet.passages}개</span><span class="spacer"></span>
+      ${S.downloads ? `<button class="btn primary" data-act="print-save" ${sheet.answers.length ? '' : 'disabled'}>인쇄용 파일 저장</button>` : `<button class="btn" data-act="print-copy">HTML 복사</button>`}</div>
+    ${sheet.answers.length ? '' : '<p class="hint" style="margin:0">빈칸이 없어요. 빈칸 종류를 켜거나, 회차 기록에서 핵심어를 [대괄호]로 묶어 주세요.</p>'}
+    ${S.downloads ? '' : '<p class="hint" style="margin:0">이 화면에서는 파일 저장이 막혀 있어요. claude.ai 웹이나 데스크톱 앱에서 열거나, HTML을 복사해 메모장에 붙여넣고 .html로 저장한 뒤 브라우저로 열어 인쇄하세요.</p>'}
+    <iframe class="paper" title="인쇄 미리보기" srcdoc="${esc(worksheetHtml(o, true))}"></iframe>
+  </div>`;
+}
 
 function remindHtml() {
   const mx = maxNo();
@@ -947,7 +995,8 @@ function remindHtml() {
       <select id="remind-n" aria-label="리마인드할 수업" style="width:auto;max-width:100%">${opts}</select>
       <button class="btn primary" data-act="present" data-blanks="1">▶ 빈칸 퀴즈로 띄우기</button>
       <button class="btn" data-act="present">정답 화면으로 띄우기</button>
-      ${S.downloads ? `<button class="btn" data-act="sheet">학습지 저장 (인쇄용)</button>` : ''}</div>
+      <button class="btn" data-act="print-open" aria-expanded="${!!S.print}">인쇄용 퀴즈 · 시험지</button></div>
+    ${S.print ? printPanelHtml(N) : ''}
     <p class="note">바로 지난 회차는 자세히, 2~3회 전은 요지와 포인트 두 개, 그보다 오래된 회차는 요지 한 줄로 줄여서 보여 줘요.<br>
       글의 구조·시험 포인트 문장 속 <b>핵심어와 핵심 구문</b>([대괄호]로 묶은 말)만 빈칸이 되고, 나머지 문장과 괄호 속 출제 메모는 남아서 내용을 떠올리는 실마리가 돼요.
       지금 빈칸은 <b>${nBlanks}개</b>이고, 화면과 학습지의 빈칸 번호가 같아요.</p>`;
@@ -1127,6 +1176,7 @@ function drawPresent() {
       <button class="btn" data-act="pr-timer">${P.running ? '일시정지' : fresh ? '타이머 시작' : '계속'}</button>
       ${!fresh && !P.running ? `<button class="btn ghost" data-act="pr-reset">처음으로</button>` : ''}
       <span class="spacer"></span>
+      <button class="btn ghost" data-act="pr-print">인쇄용으로</button>
       <button class="btn" data-act="pr-mode">${P.blanks ? '정답 화면으로' : '빈칸 퀴즈로'}</button>
       ${P.blanks ? `<button class="btn" data-act="pr-openall">이 화면 정답 보기</button>` : ''}
       <span class="pr-count">${P.i + 1} / ${P.slides.length}</span>
@@ -1137,10 +1187,15 @@ function drawPresent() {
 }
 function openBlank(b) { b.textContent = b.dataset.ans; b.classList.add('open'); S.present.open.add(b.dataset.n); }
 
-/* ---------- printable worksheet (same blanks and numbers as the class screen) ---------- */
-function worksheetHtml(N) {
-  const c = cls(), { parts, answers } = buildRemind(N, 'print');
-  const title = `${c.school} ${c.grade} ${c.name} · ${N}회차 리마인드`;
+/* ---------- printable sheet (a reminder sheet has the same blanks and numbers as the class screen) ---------- */
+const sheetTitle = o => o.kind === 'test' ? `${o.from === o.to ? o.from : `${o.from}~${o.to}`}회차 확인 시험` : `${o.N}회차 리마인드 퀴즈`;
+function worksheetHtml(o, preview) {
+  const c = cls(), sheet = buildSheet(o), key = buildSheet(o, true), answers = sheet.answers;
+  const title = `${c.school} ${c.grade} ${c.name} · ${sheetTitle(o)}`;
+  const sub = o.kind === 'test' ? `지문 ${sheet.passages}개` : `1~${o.N - 1}회차 복습`;
+  const keyHtml = `<h1>정답 · ${esc(title)}</h1>
+    <ol class="keylist"${answers.some(a => a.length > 14) ? ' style="columns:1"' : ''}>${answers.map(a => `<li>${esc(a)}</li>`).join('')}</ol>
+    ${key.html}`;
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">
@@ -1169,26 +1224,26 @@ ul.pts{margin:4px 0 0;padding-left:20px}
 .vocab{margin-top:4px;font-size:10.5pt}.vrow{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}.vw{font-weight:700}.vm{color:#444}.rel b{margin-right:2px}
 .bl sup{font-size:7pt;color:#777;margin-right:2px}.bl .f{color:#111;font-size:11pt;font-weight:700}
 .bl{display:inline-block;max-width:100%;border-bottom:1.5px solid #111;text-align:left;font-size:8.5pt;color:#555;margin:0 2px;line-height:1.4;vertical-align:baseline}
+.bl.ans{color:#b3261e;font-size:11pt;font-weight:700;padding:0 3px}.bl.ans sup{color:#b3261e}
 .key{break-before:page;page-break-before:always}
-.key ol{columns:3;font-size:10.5pt}
+.keylist{columns:3;font-size:10.5pt;margin-bottom:16px}
 .tools{margin-bottom:14px}
 .tools button{font:inherit;padding:6px 14px}
 @media print{.tools{display:none}body{padding:0}}
 </style></head><body>
-<div class="tools"><button onclick="window.print()">인쇄하기</button> 정답은 마지막 쪽에 있어요. 학생용은 앞쪽만 인쇄하세요.</div>
-<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">1~${N - 1}회차 복습 · 빈칸 ${answers.length}개</div></div>
+${preview ? '' : `<div class="tools"><button onclick="window.print()">인쇄하기</button> ${o.answer === 'both' ? '정답지는 마지막 쪽부터예요. 학생용은 앞쪽만 인쇄하세요.' : ''}</div>`}
+${o.answer === 'key' ? keyHtml : `<div class="meta"><div><h1>${esc(title)}</h1><div style="font-size:10pt;color:#555">${sub} · 빈칸 ${answers.length}개</div></div>
 <div class="name">이름 ____________ &nbsp; 점수 ____ / ${answers.length}</div></div>
-${parts.map(p => p.html).join('\n')}
-<section class="key"><h1>정답 · ${esc(title)}</h1><ol${answers.some(a => a.length > 14) ? ' style="columns:1"' : ''}>${answers.map(a => `<li>${esc(a)}</li>`).join('')}</ol></section>
+${sheet.html}
+${o.answer === 'both' ? `<section class="key">${keyHtml}</section>` : ''}`}
 </body></html>`;
 }
-async function saveSheet() {
-  const N = S.remindN || maxNo() + 1, c = cls();
-  if (!buildRemind(N, 'print').answers.length) toast('빈칸이 하나도 없어요. 기록에서 [대괄호]로 핵심어를 묶어 주세요.');
+async function saveSheet(o) {
+  const c = cls(), suffix = { both: '학생용+정답', student: '학생용', key: '정답지' }[o.answer];
   try {
-    await S.downloads.save({ filename: `${c.school}_${c.grade}_${c.name}_${N}회차_리마인드.html`.replace(/[\\/:*?"<>|\s]+/g, '_'), data: worksheetHtml(N) });
+    await S.downloads.save({ filename: `${c.school}_${c.grade}_${c.name}_${sheetTitle(o)}_${suffix}.html`.replace(/[\\/:*?"<>|~\s]+/g, '_'), data: worksheetHtml(o) });
     toast('저장했어요. 파일을 열고 인쇄하기를 누르세요.');
-  } catch (e) { if (e && e.code !== 'declined') toast('학습지를 저장하지 못했어요.'); }
+  } catch (e) { if (e && e.code !== 'declined') toast('파일을 저장하지 못했어요.'); }
 }
 function fmt(s) { const a = Math.abs(s); return (s < 0 ? '+' : '') + String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); }
 function toggleTimer() {
@@ -1233,6 +1288,13 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'remind-n') { S.remindN = +e.target.value; S.aiText = ''; render(); }
+  const po = e.target.dataset.po;
+  if (po && S.print) {
+    const t = e.target, P = S.print;
+    P[po] = t.type === 'checkbox' ? t.checked : (po === 'from' || po === 'to') ? +t.value : t.value;
+    if (P.from > P.to) [P.from, P.to] = po === 'from' ? [P.from, P.from] : [P.to, P.to];
+    render();
+  }
   if (e.target.dataset.wf === 'w' && S.editing) {
     const x = S.editing.data.passages[+e.target.dataset.i].words[+e.target.dataset.k];
     const before = x.m + x.syn + x.ant;
@@ -1351,7 +1413,15 @@ document.addEventListener('click', async e => {
     case 'ai-remind': aiRemind(); break;
     case 'ai-stop': aiCtl?.abort(); break;
     case 'present': openPresent(!!b.dataset.blanks); break;
-    case 'sheet': saveSheet(); break;
+    case 'print-open': S.print = S.print ? null : printDefaults(); render(); break;
+    case 'print-close': S.print = null; render(); break;
+    case 'print-save': saveSheet({ ...S.print, N: S.remindN || maxNo() + 1 }); break;
+    case 'print-copy': {
+      const html = worksheetHtml({ ...S.print, N: S.remindN || maxNo() + 1 });
+      navigator.clipboard.writeText(html).then(() => toast('HTML을 복사했어요. 메모장에 붙여넣고 .html로 저장하세요.'), () => toast('복사하지 못했어요. claude.ai 웹에서 열어 파일로 저장해 주세요.'));
+      break;
+    }
+    case 'pr-print': closePresent(); S.view = 'remind'; S.print = printDefaults(); render(); break;
     case 'reveal': if (!b.classList.contains('open')) openBlank(b); break;
     case 'pr-openall': $('#present').querySelectorAll('.blank:not(.open)').forEach(openBlank); break;
     case 'pr-mode': { const P = S.present; P.blanks = !P.blanks; P.slides = buildSlides(P.N, P.blanks); drawPresent(); break; }
